@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forecasting Lab — Time Series Methods</title>
+<!--
+  Forecasting teaching tool — IES 303 Operations Management (SIIT), Lecture 02 Forecast.
+  Standalone page: open directly in any browser, no server needed.
+  Method groups: Level (Moving Average, Weighted MA, Simple ES), Trend (TAF), Seasonality (Holt-Winters).
+  Deck notation: MA slide 13, WMA slide 14, ES slide 15, TAF slides 22-23; accuracy slide 45.
+-->
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --ma:#9333ea; --wma:#0d9488; --es:#2563eb; --taf:#16a34a; --hw:#ea580c;
+    --ok:#16a34a; --ok-soft:#f0fdf4; --warn-soft:#fffbeb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);background:#fafafa;font-size:16px;line-height:1.5}
+  .wrap{max-width:1060px;margin:0 auto;padding:24px 20px 60px}
+  header h1{margin:0;font-size:29px;font-weight:700}
+  header .sub{margin:4px 0 20px;color:var(--muted)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 10px;font-size:19px}
+  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:8px 0}
+  label.fld{display:flex;align-items:center;gap:7px;font-weight:600;font-size:15px}
+  select,input[type=number]{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  input[type=number]{width:76px;text-align:center}
+  button{font:inherit;font-weight:600;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .hint{color:var(--muted);font-size:13.5px}
+
+  /* data cells */
+  .cells{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+  .cellBox{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .cellBox .pl{font-size:12px;color:var(--muted);font-weight:600}
+  .cellBox input{width:60px;font:inherit;font-size:15px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:6px 2px}
+  .cellBox input:focus{border-color:var(--accent);outline:none}
+  .genBar{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+  .genBar label.fld{font-weight:500}
+  .genBar input[type=number]{width:64px;padding:4px 5px}
+
+  /* method groups */
+  .ghead{display:flex;align-items:baseline;gap:12px;margin:20px 2px 10px;flex-wrap:wrap}
+  .ghead h2{margin:0;font-size:18px}
+  .methods{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .groupRow{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:0 20px;align-items:start}
+  .mcard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .mcard.off{opacity:.55}
+  .mhead{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+  .mhead h3{margin:0;font-size:16.5px;flex:1}
+  .dot{width:13px;height:13px;border-radius:50%;flex:none}
+  .formula{background:var(--accent-soft);border-radius:8px;padding:7px 11px;font-size:14px;margin:7px 0;line-height:1.7}
+  .formula i{font-style:italic}
+  .sl{display:grid;grid-template-columns:64px 1fr 52px;gap:8px;align-items:center;margin:7px 0;font-size:15px}
+  .sl b{font-size:16px}
+  .sl input[type=range]{width:100%;accent-color:var(--accent)}
+  .sl .pv{font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+  .wIn{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .wIn .wl{font-size:12px;color:var(--muted);font-weight:600}
+  .wIn input{width:60px;padding:4px 3px}
+  .mfoot{display:flex;gap:8px;align-items:center;margin-top:9px;flex-wrap:wrap}
+  .optNote{font-size:13px;color:var(--ok);font-weight:600}
+  .mwarn{font-size:13.5px;color:#b45309;background:var(--warn-soft);border-radius:8px;padding:6px 10px;margin-top:8px}
+  .mnote{font-size:13px;color:var(--muted);margin-top:8px}
+
+  /* chart */
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:14.5px;font-weight:600;margin-bottom:4px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  #chartBox,#residBox{overflow-x:auto}
+  #chartBox svg,#residBox svg{display:block;width:100%;height:auto}
+  .biasRow{display:flex;gap:20px;flex-wrap:wrap;font-size:14.5px;margin-top:6px}
+  .biasRow span{display:inline-flex;align-items:center;gap:6px}
+  .biasRow b{font-variant-numeric:tabular-nums}
+
+  /* metrics */
+  table.metT{border-collapse:collapse;font-size:16px;margin:4px 0}
+  table.metT th,table.metT td{padding:6px 18px 6px 0;text-align:right}
+  table.metT th{color:var(--muted);font-size:14px}
+  table.metT td:first-child,table.metT th:first-child{text-align:left}
+  table.metT td.best{color:var(--ok);font-weight:800;background:var(--ok-soft);border-radius:6px}
+  table.metT td{font-variant-numeric:tabular-nums}
+
+  /* calc table */
+  .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  #calcBox{overflow-x:auto}
+  table.calcT{border-collapse:collapse;font-size:15px;white-space:nowrap}
+  table.calcT th{background:#f8fafc;color:var(--muted);font-size:13.5px;padding:6px 12px;border:1px solid var(--line)}
+  table.calcT td{padding:5px 12px;border:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+  table.calcT td:first-child{text-align:center;color:var(--muted)}
+  table.calcT tr.next td{background:var(--accent-soft);font-weight:700}
+  footer{color:var(--muted);font-size:13px;text-align:center;margin-top:28px}
+  #metricsBox{overflow-x:auto}
+
+  /* ---- Mouse only: hover effects (on touch screens they stick after a tap) ---- */
+  @media (hover:hover){
+    button:hover{background:#f3f4f6}
+    button.primary:hover{background:#1d4ed8}
+  }
+
+  /* ---- Touch screens (iPad / iPhone). Desktop with a mouse is unaffected. ---- */
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+  @media (pointer:coarse){
+    /* iOS zooms in on any text box under 16px and does not zoom back out */
+    input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea{font-size:16px}
+    button, select{min-height:44px}
+    input[type=checkbox]{width:22px;height:22px}
+    .sl input[type=range]{height:32px}
+  }
+
+  /* ---- Narrow screens (phones) ---- */
+  @media screen and (max-width:640px){
+    .wrap{padding:16px 12px 48px}
+    .card{padding:14px 12px;border-radius:12px}
+    .mcard{padding:12px 12px}
+    header h1{font-size:24px}
+    select{max-width:100%}
+    label.fld{flex-wrap:wrap;max-width:100%}
+    label.fld select{min-width:0}
+    .methods, .groupRow{grid-template-columns:1fr}
+    .cellBox input{width:54px}
+    table.metT th, table.metT td{padding:6px 10px 6px 0}
+    /* keep chart labels readable: scroll sideways rather than shrink to a third */
+    #chartBox svg, #residBox svg{min-width:620px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Forecasting Lab</h1>
+    <p class="sub">Moving average · weighted MA · exponential smoothing · trend · seasonality — tune k, weights, α, β, γ and watch the forecast follow demand · IES 303 Forecasting</p>
+  </header>
+
+  <section class="card">
+    <h2>Demand data</h2>
+    <div class="row">
+      <label class="fld">Data pattern
+        <select id="preset">
+          <optgroup label="Data patterns">
+            <option value="level-low">Stable level · low noise</option>
+            <option value="level-high" selected>Stable level · high noise</option>
+            <option value="trend-low">Trend · low noise</option>
+            <option value="trend-high">Trend · high noise</option>
+            <option value="seasonal">Seasonal · stable level (m = 6)</option>
+            <option value="trend-seasonal">Trend + seasonal · high noise (m = 6)</option>
+          </optgroup>
+          <optgroup label="Lecture examples">
+            <option value="daily">Daily sales — 3 weeks (m = 7)</option>
+            <option value="es8">Simple ES example (8 periods)</option>
+            <option value="taf8">TAF group assignment — EV sales (8 periods)</option>
+          </optgroup>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+      <label class="fld">Periods <input type="number" id="nPeriods" min="4" max="36" value="24"></label>
+    </div>
+    <div class="cells" id="cells"></div>
+    <div class="genBar">
+      <div class="row" style="margin:0">
+        <b style="font-size:15px">Random demand:</b>
+        <label class="fld">base <input type="number" id="gBase" value="100"></label>
+        <label class="fld">trend/period <input type="number" id="gTrend" value="2" step="0.5"></label>
+        <label class="fld">season length <input type="number" id="gSeason" min="0" max="12" value="6"></label>
+        <label class="fld">season ± % <input type="number" id="gAmp" min="0" max="90" value="25"></label>
+        <label class="fld">noise ± % <input type="number" id="gNoise" min="0" max="90" value="8"></label>
+        <button id="btnGen">Generate</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="ghead"><h2>1 · Level methods</h2><span class="hint">demand fluctuates around a stable average — the forecast smooths out the noise</span></div>
+  <div class="methods" style="margin-bottom:6px">
+    <section class="mcard" id="card-ma">
+      <div class="mhead"><span class="dot" style="background:var(--ma)"></span>
+        <h3>Moving Average</h3>
+        <label class="fld"><input type="checkbox" id="en-ma" checked> show</label>
+      </div>
+      <div class="formula">F<sub>t+1</sub> = (A<sub>t</sub> + A<sub>t−1</sub> + … + A<sub>t−k+1</sub>) / k</div>
+      <div class="sl"><b>k</b><input type="range" id="p-maK" min="1" max="12" step="1" value="3"><span class="pv" id="v-maK">3</span></div>
+      <div class="mfoot"><button id="opt-ma">Auto-optimize</button><span class="optNote" id="note-ma"></span></div>
+      <div class="mwarn" id="warn-ma" style="display:none"></div>
+      <div class="mnote">Larger k = smoother but slower to react · k = 1 is the naive forecast. First forecast at period k+1.</div>
+    </section>
+
+    <section class="mcard" id="card-wma">
+      <div class="mhead"><span class="dot" style="background:var(--wma)"></span>
+        <h3>Weighted Moving Average</h3>
+        <label class="fld"><input type="checkbox" id="en-wma" checked> show</label>
+      </div>
+      <div class="formula">F<sub>t+1</sub> = w<sub>1</sub>A<sub>t</sub> + w<sub>2</sub>A<sub>t−1</sub> + … + w<sub>k</sub>A<sub>t−k+1</sub></div>
+      <div class="row" style="margin:6px 0"><label class="fld">k <input type="number" id="p-wmaK" min="2" max="6" value="4"></label>
+        <span class="hint">w₁ = newest period</span></div>
+      <div class="row" id="wmaWrow" style="margin:6px 0"></div>
+      <div class="mfoot"><button id="opt-wma">Auto-optimize weights</button><span class="optNote" id="note-wma"></span></div>
+      <div class="mwarn" id="warn-wma" style="display:none"></div>
+      <div class="mnote">Weights are normalized to sum to 1. Heavier weight on recent periods reacts faster; equal weights = simple MA.</div>
+    </section>
+
+    <section class="mcard" id="card-es">
+      <div class="mhead"><span class="dot" style="background:var(--es)"></span>
+        <h3>Simple Exponential Smoothing</h3>
+        <label class="fld"><input type="checkbox" id="en-es" checked> show</label>
+      </div>
+      <div class="formula">F<sub>t+1</sub> = F<sub>t</sub> + α (A<sub>t</sub> − F<sub>t</sub>) &nbsp;·&nbsp; start naive: F<sub>2</sub> = A<sub>1</sub></div>
+      <div class="sl"><b>α</b><input type="range" id="p-esA" min="0" max="1" step="0.01" value="0.30"><span class="pv" id="v-esA">0.30</span></div>
+      <div class="mfoot"><button id="opt-es">Auto-optimize</button><span class="optNote" id="note-es"></span></div>
+      <div class="mnote">Low α = smooth &amp; slow to react · high α = responsive &amp; nervous · α = 1 is the naive forecast.</div>
+    </section>
+  </div>
+
+  <div class="groupRow">
+    <div>
+      <div class="ghead"><h2>2 · Trend</h2><span class="hint">systematic growth or decline — project the slope</span></div>
+      <section class="mcard" id="card-taf">
+        <div class="mhead"><span class="dot" style="background:var(--taf)"></span>
+          <h3>Trend-Adjusted (TAF)</h3>
+          <label class="fld"><input type="checkbox" id="en-taf"> show</label>
+        </div>
+        <div class="formula">
+          TAF<sub>t+1</sub> = S<sub>t</sub> + T<sub>t</sub><br>
+          S<sub>t</sub> = TAF<sub>t</sub> + α (A<sub>t</sub> − TAF<sub>t</sub>)<br>
+          T<sub>t</sub> = T<sub>t−1</sub> + β (TAF<sub>t</sub> − TAF<sub>t−1</sub> − T<sub>t−1</sub>)<br>
+          initialize on periods 1–2: TAF<sub>2</sub> = A<sub>2</sub>, S<sub>2</sub> = A<sub>2</sub>, T<sub>2</sub> = A<sub>2</sub> − A<sub>1</sub>
+        </div>
+        <div class="sl"><b>α</b><input type="range" id="p-tafA" min="0" max="1" step="0.01" value="0.30"><span class="pv" id="v-tafA">0.30</span></div>
+        <div class="sl"><b>β</b><input type="range" id="p-tafB" min="0" max="1" step="0.01" value="0.20"><span class="pv" id="v-tafB">0.20</span></div>
+        <div class="row" style="margin:6px 0"><span class="hint">Initial trend T<sub>2</sub> = A<sub>2</sub> − A<sub>1</sub> = <b id="tafT2">–</b> — read off the data, not tuned</span></div>
+        <div class="mfoot"><button id="opt-taf">Auto-optimize</button><span class="optNote" id="note-taf"></span></div>
+        <div class="mnote">S<sub>t</sub> smooths the level (same as simple ES); β smooths the trend. Periods 1 and 2 are used up by initialization, so the first forecast error is at period 3.</div>
+      </section>
+    </div>
+    <div>
+      <div class="ghead"><h2>3 · Seasonality</h2><span class="hint">repeating pattern every m periods</span></div>
+      <section class="mcard" id="card-hw">
+        <div class="mhead"><span class="dot" style="background:var(--hw)"></span>
+          <h3>Holt–Winters (seasonal)</h3>
+          <label class="fld"><input type="checkbox" id="en-hw"> show</label>
+        </div>
+        <div class="formula">
+          L<sub>t</sub> = α (A<sub>t</sub> / S<sub>t−m</sub>) + (1−α)(L<sub>t−1</sub> + T<sub>t−1</sub>)<br>
+          T<sub>t</sub> = β (L<sub>t</sub> − L<sub>t−1</sub>) + (1−β) T<sub>t−1</sub><br>
+          S<sub>t</sub> = γ (A<sub>t</sub> / L<sub>t</sub>) + (1−γ) S<sub>t−m</sub><br>
+          F<sub>t+1</sub> = (L<sub>t</sub> + T<sub>t</sub>) · S<sub>t+1−m</sub>
+        </div>
+        <div class="sl"><b>α</b><input type="range" id="p-hwA" min="0" max="1" step="0.01" value="0.30"><span class="pv" id="v-hwA">0.30</span></div>
+        <div class="sl"><b>β</b><input type="range" id="p-hwB" min="0" max="1" step="0.01" value="0.10"><span class="pv" id="v-hwB">0.10</span></div>
+        <div class="sl"><b>γ</b><input type="range" id="p-hwG" min="0" max="1" step="0.01" value="0.20"><span class="pv" id="v-hwG">0.20</span></div>
+        <div class="row" style="margin:6px 0"><label class="fld">Season length m <input type="number" id="p-hwM" min="2" max="12" value="6"></label></div>
+        <div class="mfoot"><button id="opt-hw">Auto-optimize</button><span class="optNote" id="note-hw"></span></div>
+        <div class="mwarn" id="warn-hw" style="display:none"></div>
+        <div class="mnote">Extends the lecture's <i>seasonal relatives</i>: the seasonal indices S<sub>t</sub> are re-estimated by smoothing (γ) instead of staying fixed. Level L, trend T as before. First forecast after one full season.</div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <h2>Actual vs forecast</h2>
+    <div class="legend" id="legend"></div>
+    <div id="chartBox"></div>
+  </section>
+
+  <section class="card">
+    <h2>Residual plot</h2>
+    <p class="hint" style="margin:0 0 6px">Residual e<sub>t</sub> = A<sub>t</sub> − F<sub>t</sub>. Points scattered randomly around zero = the method has captured the pattern. Runs of same-sign residuals, a drift, or a repeating wave mean something is left unexplained (trend or seasonality).</p>
+    <div id="residBox"></div>
+    <div class="biasRow" id="biasRow"></div>
+  </section>
+
+  <section class="card">
+    <h2>Forecast accuracy</h2>
+    <div class="row">
+      <label class="fld">Optimize / highlight by
+        <select id="crit"><option value="MAD">MAD</option><option value="MSE">MSE</option><option value="MAPE">MAPE</option></select>
+      </label>
+      <span class="hint">MAD = Σ|e| / n · MSE = Σe² / (n−1) · MAPE = Σ(|e|/A)·100 / n — over periods that have a forecast.</span>
+    </div>
+    <div id="metricsBox"></div>
+  </section>
+
+  <section class="card">
+    <h2>Calculation table</h2>
+    <div class="tabs" id="calcTabs"></div>
+    <div id="calcBox"></div>
+  </section>
+
+  <footer>Forecasting teaching tool · IES 303 Operations Management · SIIT</footer>
+</div>
+
+<script id="solverScript">
+/* ---------- pure forecasting models (unit-testable) ---------- */
+function maModel(A, k){
+  const n = A.length;
+  if(k < 1 || n < k) return null;
+  const F = Array(n+1).fill(null);
+  for(let t=k;t<=n;t++){
+    let s = 0;
+    for(let i=t-k;i<t;i++) s += A[i];
+    F[t] = s/k;
+  }
+  return {F, errStart:k};
+}
+
+function wmaModel(A, w){                 // w: newest period first; normalized to sum 1
+  const k = w.length, n = A.length;
+  if(k < 1 || n < k) return null;
+  const sum = w.reduce((a,b)=>a+b,0);
+  if(sum <= 0) return null;
+  const wn = w.map(x => x/sum);
+  const F = Array(n+1).fill(null);
+  for(let t=k;t<=n;t++){
+    let s = 0;
+    for(let i=0;i<k;i++) s += wn[i]*A[t-1-i];
+    F[t] = s;
+  }
+  return {F, errStart:k, wn};
+}
+
+function simpleES(A, alpha){
+  const n = A.length, F = Array(n+1).fill(null);
+  if(n < 1) return {F, errStart:1};
+  F[1] = A[0];                      // first forecast is naive: F_2 = A_1
+  for(let t=2;t<=n;t++) F[t] = F[t-1] + alpha*(A[t-1]-F[t-1]);
+  return {F, errStart:1};
+}
+
+/* TAF per deck slide 22 "Step 1: Initialize".
+   Periods 1 and 2 are consumed by initialization, so the first forecast that
+   can be scored is period 3 (array index 2) — hence errStart = 2.
+     TAF_2 = A_2 ,  S_2 = TAF_2 + alpha(A_2 - TAF_2) = A_2 ,  T_2 = A_2 - A_1  */
+function tafModel(A, alpha, beta){
+  const n = A.length;
+  const F = Array(n+1).fill(null), S = Array(n).fill(null), T = Array(n).fill(null);
+  if(n < 2) return {F, S, T, errStart:2};
+  F[1] = A[1];                              // TAF_2 = A_2
+  S[1] = F[1] + alpha*(A[1]-F[1]);          // = A_2; the correction term is exactly zero
+  T[1] = A[1] - A[0];                       // T_2 = A_2 - A_1
+  for(let t=2;t<n;t++){
+    F[t] = S[t-1] + T[t-1];
+    S[t] = F[t] + alpha*(A[t]-F[t]);
+    T[t] = T[t-1] + beta*(F[t]-F[t-1]-T[t-1]);
+  }
+  F[n] = S[n-1] + T[n-1];                   // forecast for the next, unobserved period
+  return {F, S, T, errStart:2};
+}
+
+function wintersModel(A, alpha, beta, gamma, m){
+  const n = A.length;
+  if(n < m || m < 2) return null;
+  if(A.some(v => v <= 0)) return null;         // multiplicative model needs positive demand
+  const L = Array(n).fill(null), T = Array(n).fill(null), S = Array(n).fill(null), F = Array(n+1).fill(null);
+  let avg1 = 0; for(let i=0;i<m;i++) avg1 += A[i]; avg1 /= m;
+  for(let i=0;i<m;i++) S[i] = A[i]/avg1;
+  let Tinit = 0;
+  if(n >= 2*m){
+    let avg2 = 0; for(let i=m;i<2*m;i++) avg2 += A[i]; avg2 /= m;
+    Tinit = (avg2-avg1)/m;
+  }
+  L[m-1] = avg1; T[m-1] = Tinit;
+  F[m] = (L[m-1]+T[m-1]) * S[0];
+  for(let t=m;t<n;t++){
+    const sPrev = S[t-m];
+    L[t] = alpha*(A[t]/sPrev) + (1-alpha)*(L[t-1]+T[t-1]);
+    T[t] = beta*(L[t]-L[t-1]) + (1-beta)*T[t-1];
+    S[t] = gamma*(A[t]/L[t]) + (1-gamma)*sPrev;
+    F[t+1] = (L[t]+T[t]) * S[t+1-m];
+  }
+  return {F, L, T, S, errStart:m};
+}
+
+/* accuracy per lecture slide 45: MAD ÷ n, MSE ÷ (n−1), MAPE ÷ n */
+function accuracy(A, F, errStart){
+  let n = 0, sAbs = 0, sSq = 0, sPct = 0, pctOk = true;
+  for(let t=errStart; t<A.length; t++){
+    if(F[t] == null) continue;
+    const e = A[t] - F[t];
+    n++; sAbs += Math.abs(e); sSq += e*e;
+    if(A[t] !== 0) sPct += Math.abs(e)/A[t]*100; else pctOk = false;
+  }
+  if(!n) return null;
+  return {n, MAD: sAbs/n, MSE: n > 1 ? sSq/(n-1) : null, MAPE: pctOk ? sPct/n : null};
+}
+
+/* residuals e_t = A_t − F_t, only for periods that have a forecast */
+function residuals(A, F, errStart){
+  const out = [];
+  for(let t=errStart; t<A.length; t++){
+    if(F[t] == null) continue;
+    out.push({t: t+1, e: A[t]-F[t]});          // t+1 = 1-based period label
+  }
+  return out;
+}
+
+/* mean error (bias): positive = forecast runs low, negative = forecast runs high */
+function meanError(A, F, errStart){
+  const r = residuals(A, F, errStart);
+  if(!r.length) return null;
+  return r.reduce((s,x)=>s+x.e,0)/r.length;
+}
+
+function runMethod(A, key, p){
+  if(key === 'ma')  return maModel(A, p.maK);
+  if(key === 'wma') return wmaModel(A, p.wmaW);
+  if(key === 'es')  return simpleES(A, p.esA);
+  if(key === 'taf') return tafModel(A, p.tafA, p.tafB);
+  if(key === 'hw')  return wintersModel(A, p.hwA, p.hwB, p.hwG, p.hwM);
+}
+
+function methodScore(A, key, q, crit){
+  const r = runMethod(A, key, q);
+  if(!r) return Infinity;
+  const acc = accuracy(A, r.F, r.errStart);
+  if(!acc || acc[crit] == null) return Infinity;
+  return acc[crit];
+}
+
+/* auto-optimize:
+   ma  -> best k in 1..min(12, n-1)
+   wma -> best weights for the current k (grid over the simplex, step 0.05)
+   es/taf/hw -> grid search on smoothing constants, coarse 0.05 then fine 0.01 */
+function optimizeMethod(A, key, p, crit){
+  if(key === 'ma'){
+    let best = null, bv = Infinity;
+    for(let k=1;k<=Math.min(12, A.length-1);k++){
+      const s = methodScore(A, 'ma', {maK:k}, crit);
+      if(s < bv){ bv = s; best = k; }
+    }
+    return best == null ? null : {params:{maK:best}, value:bv};
+  }
+  if(key === 'wma'){
+    const k = p.wmaW.length, STEPS = 20;      // weights in steps of 0.05
+    let best = null, bv = Infinity;
+    const w = Array(k).fill(0);
+    const rec = (i, left) => {
+      if(i === k-1){
+        w[i] = left;
+        const s = methodScore(A, 'wma', {wmaW: w.map(x=>x/STEPS)}, crit);
+        if(s < bv){ bv = s; best = w.map(x=>x/STEPS); }
+        return;
+      }
+      for(let v=0; v<=left; v++){ w[i] = v; rec(i+1, left-v); }
+    };
+    rec(0, STEPS);
+    return best == null ? null : {params:{wmaW:best}, value:bv};
+  }
+  const dims = key === 'es' ? ['esA'] : key === 'taf' ? ['tafA','tafB'] : ['hwA','hwB','hwG'];
+  const search = (center, step, span) => {
+    let best = null, bestVal = Infinity;
+    const ranges = dims.map(d => {
+      const lo = Math.max(0, center[d]-span), hi = Math.min(1, center[d]+span);
+      const vals = [];
+      for(let v=lo; v<=hi+1e-9; v+=step) vals.push(Math.round(v*100)/100);
+      return vals;
+    });
+    const rec = (i, q) => {
+      if(i === dims.length){
+        const s = methodScore(A, key, q, crit);
+        if(s < bestVal){ bestVal = s; best = Object.assign({}, q); }
+        return;
+      }
+      for(const v of ranges[i]){ q[dims[i]] = v; rec(i+1, q); }
+    };
+    rec(0, Object.assign({}, center));
+    return {best, bestVal};
+  };
+  // carry fixed params (hwM, ...) into the search; only dims are varied
+  const start = Object.assign({}, p, Object.fromEntries(dims.map(d => [d, 0.5])));
+  const coarse = search(start, 0.05, 0.5);
+  if(!coarse.best) return null;
+  const fine = search(coarse.best, 0.01, 0.05);
+  return {params: fine.best, value: fine.bestVal};
+}
+</script>
+
+<script>
+/* ---------- UI ---------- */
+const $ = id => document.getElementById(id);
+const KEYS = ['ma','wma','es','taf','hw'];
+const COLORS = {ma:'#9333ea', wma:'#0d9488', es:'#2563eb', taf:'#16a34a', hw:'#ea580c'};
+const NAMES = {ma:'Moving Average', wma:'Weighted MA', es:'Simple ES', taf:'Trend-Adjusted (TAF)', hw:'Holt–Winters'};
+
+/* deterministic scenario data: same pattern every time the page loads */
+function seededRnd(seed){ let s = seed>>>0; return () => { s = (s*1103515245+12345) & 0x7fffffff; return s/0x7fffffff; }; }
+function genSeries(d){
+  const r = seededRnd(d.seed || 1), out = [];
+  for(let t=0;t<d.n;t++){
+    let v = d.base + d.trend*t;
+    if(d.m >= 2) v *= 1 + d.amp/100*Math.sin(2*Math.PI*(t%d.m)/d.m);
+    v *= 1 + d.noise/100*(2*r()-1);
+    out.push(Math.max(1, Math.round(v)));
+  }
+  return out;
+}
+const PRESETS = {
+  'level-low'     : {gen:{n:24, base:100, trend:0,   m:0, amp:0,  noise:5,  seed:3}},
+  'level-high'    : {gen:{n:24, base:100, trend:0,   m:0, amp:0,  noise:25, seed:7}},
+  'trend-low'     : {gen:{n:24, base:100, trend:3,   m:0, amp:0,  noise:5,  seed:5}},
+  'trend-high'    : {gen:{n:24, base:100, trend:3,   m:0, amp:0,  noise:20, seed:9}},
+  'seasonal'      : {gen:{n:24, base:100, trend:0,   m:6, amp:30, noise:6,  seed:4},  m:6},
+  'trend-seasonal': {gen:{n:24, base:100, trend:2.5, m:6, amp:30, noise:15, seed:8},  m:6},
+  'daily': {data:[55,67,75,82,98,90,36, 52,60,73,85,99,86,40, 50,64,76,87,96,88,44], m:7},
+  'es8'  : {data:[42,40,43,40,41,39,46,44], m:4},
+  'taf8' : {data:[500,540,610,635,680,735,795,830]},   // EV group assignment, Jan-Aug 2026
+};
+const state = {A:[], tab:'ma'};
+let results = {};
+
+const f2 = v => v == null ? '–' : (Math.round(v*100)/100).toFixed(2);
+const f2s = v => v == null ? '–' : (+v.toFixed(2)).toString();
+
+/* ----- data panel ----- */
+function applyPreset(name){
+  const p = PRESETS[name];
+  if(!p) return;
+  state.A = p.data ? p.data.slice() : genSeries(p.gen);
+  if(p.m) $('p-hwM').value = p.m;
+  renderCells(); update();
+}
+function renderCells(){
+  $('cells').innerHTML = state.A.map((v,i) =>
+    `<span class="cellBox"><span class="pl">${i+1}</span><input type="number" data-i="${i}" value="${+v.toFixed(2)}"></span>`).join('');
+  $('nPeriods').value = state.A.length;
+}
+$('cells').addEventListener('input', e => {
+  const i = e.target.dataset.i;
+  if(i === undefined) return;
+  state.A[+i] = parseFloat(e.target.value) || 0;
+  $('preset').value = 'custom';
+  update();
+});
+$('nPeriods').addEventListener('change', e => {
+  let n = Math.max(4, Math.min(36, +e.target.value || 4));
+  while(state.A.length < n) state.A.push(state.A[state.A.length-1]);
+  state.A.length = n;
+  $('preset').value = 'custom';
+  renderCells(); update();
+});
+$('preset').addEventListener('change', e => applyPreset(e.target.value));
+$('btnGen').addEventListener('click', () => {
+  const n = Math.max(4, Math.min(36, +$('nPeriods').value || 24));
+  state.A = genSeries({
+    n, base:+$('gBase').value || 100, trend:+$('gTrend').value || 0,
+    m:Math.max(0, Math.min(12, +$('gSeason').value || 0)),
+    amp:+$('gAmp').value || 0, noise:+$('gNoise').value || 0,
+    seed: Math.floor(Math.random()*2**31),
+  });
+  const m = Math.max(0, Math.min(12, +$('gSeason').value || 0));
+  if(m >= 2) $('p-hwM').value = m;
+  $('preset').value = 'custom';
+  renderCells(); update();
+});
+/* T2 is now fixed by the data (A2 − A1), so it is displayed rather than edited. */
+function showTafT2(){
+  const A = state.A;
+  $('tafT2').textContent = A.length > 1 ? f2s(A[1]-A[0]) : '–';
+}
+
+/* ----- method params ----- */
+const SLIDERS = [['p-maK','v-maK',0],['p-esA','v-esA',2],['p-tafA','v-tafA',2],['p-tafB','v-tafB',2],['p-hwA','v-hwA',2],['p-hwB','v-hwB',2],['p-hwG','v-hwG',2]];
+SLIDERS.forEach(([sid,vid,dec]) => $(sid).addEventListener('input', () => {
+  $(vid).textContent = (+$(sid).value).toFixed(dec);
+  clearNotes(); update();
+}));
+['p-hwM'].forEach(id => $(id).addEventListener('change', () => { clearNotes(); update(); }));
+KEYS.forEach(k => $('en-'+k).addEventListener('change', update));
+$('crit').addEventListener('change', update);
+function clearNotes(){ KEYS.forEach(k => $('note-'+k).textContent = ''); }
+
+function buildWmaInputs(weights){
+  const k = weights.length;
+  $('wmaWrow').innerHTML = weights.map((w,i) =>
+    `<span class="wIn"><span class="wl">w${i+1}${i===0?' (new)':i===k-1?' (old)':''}</span><input type="number" step="0.05" min="0" data-w="${i}" value="${+w.toFixed(2)}"></span>`).join('');
+}
+function defaultWeights(k){                       // descending, deck style: .4 .3 .2 .1 for k=4
+  const raw = []; for(let i=0;i<k;i++) raw.push(k-i);
+  const s = raw.reduce((a,b)=>a+b,0);
+  return raw.map(x => +(x/s).toFixed(2));
+}
+$('p-wmaK').addEventListener('change', () => {
+  const k = Math.max(2, Math.min(6, +$('p-wmaK').value || 4));
+  $('p-wmaK').value = k;
+  buildWmaInputs(defaultWeights(k));
+  clearNotes(); update();
+});
+$('wmaWrow').addEventListener('input', () => { clearNotes(); update(); });
+
+function params(){
+  return {
+    maK: Math.max(1, Math.round(+$('p-maK').value || 1)),
+    wmaW: [...document.querySelectorAll('#wmaWrow input')].map(i => Math.max(0, +i.value || 0)),
+    esA:+$('p-esA').value,
+    tafA:+$('p-tafA').value, tafB:+$('p-tafB').value,
+    hwA:+$('p-hwA').value, hwB:+$('p-hwB').value, hwG:+$('p-hwG').value,
+    hwM:Math.max(2, Math.min(12, +$('p-hwM').value || 2)),
+  };
+}
+function enabled(k){ return $('en-'+k).checked; }
+
+KEYS.forEach(k => {
+  $('opt-'+k).addEventListener('click', () => {
+    const crit = $('crit').value;
+    const r = optimizeMethod(state.A, k, params(), crit);
+    if(!r){ $('note-'+k).textContent = 'not enough data'; return; }
+    const set = (sid, vid, val, dec) => { $(sid).value = val; $(vid).textContent = val.toFixed(dec); };
+    if(k === 'ma') set('p-maK','v-maK', r.params.maK, 0);
+    if(k === 'wma') buildWmaInputs(r.params.wmaW);
+    if(k === 'es') set('p-esA','v-esA', r.params.esA, 2);
+    if(k === 'taf'){ set('p-tafA','v-tafA', r.params.tafA, 2); set('p-tafB','v-tafB', r.params.tafB, 2); }
+    if(k === 'hw'){ set('p-hwA','v-hwA', r.params.hwA, 2); set('p-hwB','v-hwB', r.params.hwB, 2); set('p-hwG','v-hwG', r.params.hwG, 2); }
+    update();
+    $('note-'+k).textContent = (k==='ma' ? `best k = ${r.params.maK} · ` : '') + `best ${crit} = ${f2s(r.value)}`;
+  });
+});
+
+/* ----- compute + render ----- */
+function update(){
+  const p = params();
+  results = {};
+  for(const k of KEYS) results[k] = runMethod(state.A, k, p);
+
+  const warn = (id, show, msg) => { const el=$(id); el.style.display = show?'':'none'; if(show) el.textContent = msg; };
+  warn('warn-ma', !results.ma, `Need at least k = ${p.maK} periods of data.`);
+  warn('warn-wma', !results.wma,
+    p.wmaW.reduce((a,b)=>a+b,0) <= 0 ? 'Weights must not all be zero.' : `Need at least k = ${p.wmaW.length} periods of data.`);
+  warn('warn-hw', !results.hw,
+    state.A.some(v => v <= 0) ? 'Multiplicative seasonality needs all-positive demand values.'
+                              : `Need at least m = ${p.hwM} periods of data (one full season) to initialize.`);
+  KEYS.forEach(k => $('card-'+k).classList.toggle('off', !enabled(k)));
+  showTafT2();
+  renderChart(); renderResiduals(); renderMetrics(); renderCalcTabs(); renderCalc();
+}
+
+function activeKeys(){ return KEYS.filter(k => enabled(k) && results[k]); }
+
+function renderChart(){
+  const A = state.A, n = A.length;
+  const series = [{name:'Actual demand', color:'#4b5563', vals:A.map((v,i)=>[i+1,v]), dots:true}];
+  for(const k of activeKeys()){
+    const F = results[k].F;
+    const pts = [];
+    for(let t=0;t<=n;t++) if(F[t] != null) pts.push([t+1, F[t]]);
+    series.push({name:NAMES[k], color:COLORS[k], vals:pts, last:true});
+  }
+  $('legend').innerHTML = series.map(s =>
+    `<span><span class="dot" style="background:${s.color}"></span>${s.name}</span>`).join('');
+
+  const W=940, H=360, L=56, R=24, Tm=16, B=34;
+  let ymin=Infinity, ymax=-Infinity;
+  series.forEach(s => s.vals.forEach(([,y]) => { ymin=Math.min(ymin,y); ymax=Math.max(ymax,y); }));
+  if(!isFinite(ymin)){ $('chartBox').innerHTML=''; return; }
+  const pad = (ymax-ymin)*0.1 || 1; ymin-=pad; ymax+=pad;
+  const xmax = n+1;
+  const X = x => L + (x-1)/(xmax-1)*(W-L-R);
+  const Y = y => Tm + (ymax-y)/(ymax-ymin)*(H-Tm-B);
+  const rawStep=(ymax-ymin)/5, mag=Math.pow(10,Math.floor(Math.log10(rawStep)));
+  const step=[1,2,5,10].map(s=>s*mag).find(s=>s>=rawStep)||rawStep;
+  let g='';
+  for(let y=Math.ceil(ymin/step)*step; y<=ymax; y+=step){
+    g += `<line x1="${L}" y1="${Y(y)}" x2="${W-R}" y2="${Y(y)}" stroke="#e5e7eb"/>`+
+         `<text x="${L-8}" y="${Y(y)+4}" text-anchor="end" font-size="12" fill="#6b7280">${+y.toFixed(1)}</text>`;
+  }
+  const xstep = Math.max(1, Math.ceil(n/16));
+  for(let x=1; x<=xmax; x+=xstep){
+    g += `<text x="${X(x)}" y="${H-10}" text-anchor="middle" font-size="12" fill="#6b7280">${x}</text>`;
+  }
+  g += `<text x="${(L+W-R)/2}" y="${H+2}" text-anchor="middle" font-size="12" fill="#9ca3af">period</text>`;
+  let lines='';
+  for(const s of series){
+    if(s.vals.length > 1){
+      const d = s.vals.map(([x,y],i)=>(i?'L':'M')+X(x).toFixed(1)+' '+Y(y).toFixed(1)).join(' ');
+      lines += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.4" ${s.dots?'':'opacity="0.9"'}/>`;
+    }
+    if(s.dots) s.vals.forEach(([x,y]) => lines += `<circle cx="${X(x).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="3.4" fill="${s.color}"/>`);
+    if(s.last && s.vals.length){
+      const [x,y]=s.vals[s.vals.length-1];
+      if(x === n+1) lines += `<circle cx="${X(x).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="4.6" fill="#fff" stroke="${s.color}" stroke-width="2.4"/>`;
+    }
+  }
+  lines += `<line x1="${X(n)+ (X(n+1)-X(n))/2}" y1="${Tm}" x2="${X(n)+(X(n+1)-X(n))/2}" y2="${H-B}" stroke="#d1d5db" stroke-dasharray="4 4"/>`+
+           `<text x="${X(n+1)}" y="${Tm+2}" text-anchor="middle" font-size="11.5" fill="#9ca3af">next</text>`;
+  $('chartBox').innerHTML = `<svg viewBox="0 0 ${W} ${H+8}" xmlns="http://www.w3.org/2000/svg">${g}${lines}</svg>`;
+}
+
+function renderResiduals(){
+  const A = state.A, n = A.length, keys = activeKeys();
+  const sets = keys.map(k => ({key:k, color:COLORS[k], pts:residuals(A, results[k].F, results[k].errStart)}))
+                   .filter(s => s.pts.length);
+  if(!sets.length){ $('residBox').innerHTML = '<p class="hint">Enable at least one method above.</p>'; $('biasRow').innerHTML = ''; return; }
+
+  const W=940, H=210, L=56, R=24, Tm=14, B=30;
+  let amax = 0;
+  sets.forEach(s => s.pts.forEach(p => amax = Math.max(amax, Math.abs(p.e))));
+  if(amax === 0) amax = 1;
+  const ymax = amax*1.18, ymin = -ymax;
+  const xmax = Math.max(2, n);
+  const X = x => L + (x-1)/(xmax-1)*(W-L-R);
+  const Y = y => Tm + (ymax-y)/(ymax-ymin)*(H-Tm-B);
+
+  const rawStep=(ymax-ymin)/4, mag=Math.pow(10,Math.floor(Math.log10(rawStep)));
+  const step=[1,2,5,10].map(s=>s*mag).find(s=>s>=rawStep)||rawStep;
+  let g='';
+  for(let y=-Math.floor(ymax/step)*step; y<=ymax; y+=step){
+    if(Math.abs(y) < 1e-9) continue;                       // zero line drawn separately
+    g += `<line x1="${L}" y1="${Y(y)}" x2="${W-R}" y2="${Y(y)}" stroke="#e5e7eb"/>`+
+         `<text x="${L-8}" y="${Y(y)+4}" text-anchor="end" font-size="12" fill="#6b7280">${+y.toFixed(1)}</text>`;
+  }
+  g += `<line x1="${L}" y1="${Y(0)}" x2="${W-R}" y2="${Y(0)}" stroke="#9ca3af" stroke-width="1.8"/>`+
+       `<text x="${L-8}" y="${Y(0)+4}" text-anchor="end" font-size="12" fill="#4b5563" font-weight="700">0</text>`;
+  const xstep = Math.max(1, Math.ceil(n/16));
+  for(let x=1; x<=n; x+=xstep)
+    g += `<text x="${X(x)}" y="${H-9}" text-anchor="middle" font-size="12" fill="#6b7280">${x}</text>`;
+  g += `<text x="${(L+W-R)/2}" y="${H+2}" text-anchor="middle" font-size="12" fill="#9ca3af">period</text>`;
+
+  let marks='';
+  for(const s of sets){
+    if(s.pts.length > 1){
+      const d = s.pts.map((p,i)=>(i?'L':'M')+X(p.t).toFixed(1)+' '+Y(p.e).toFixed(1)).join(' ');
+      marks += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.5" opacity="0.55"/>`;
+    }
+    s.pts.forEach(p => {
+      marks += `<line x1="${X(p.t).toFixed(1)}" y1="${Y(0)}" x2="${X(p.t).toFixed(1)}" y2="${Y(p.e).toFixed(1)}" stroke="${s.color}" stroke-width="1" opacity="0.35"/>`+
+               `<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p.e).toFixed(1)}" r="3.2" fill="${s.color}"/>`;
+    });
+  }
+  $('residBox').innerHTML = `<svg viewBox="0 0 ${W} ${H+8}" xmlns="http://www.w3.org/2000/svg">${g}${marks}</svg>`;
+
+  $('biasRow').innerHTML = sets.map(s => {
+    const me = meanError(A, results[s.key].F, results[s.key].errStart);
+    const tag = me == null ? '' : Math.abs(me) < 1e-9 ? ' (unbiased)'
+              : me > 0 ? ' (forecast runs low)' : ' (forecast runs high)';
+    return `<span><span class="dot" style="background:${s.color}"></span>${NAMES[s.key]} — mean error <b>${f2(me)}</b>${tag}</span>`;
+  }).join('');
+}
+
+function renderMetrics(){
+  const keys = activeKeys();
+  if(!keys.length){ $('metricsBox').innerHTML = '<p class="hint">Enable at least one method above.</p>'; return; }
+  const accs = {};
+  keys.forEach(k => accs[k] = accuracy(state.A, results[k].F, results[k].errStart));
+  const cols = ['MAD','MSE','MAPE'];
+  const best = {};
+  for(const c of cols){
+    let bv = Infinity, bk = null;
+    for(const k of keys){ const a=accs[k]; if(a && a[c]!=null && a[c] < bv - 1e-9){ bv=a[c]; bk=k; } }
+    best[c] = keys.length > 1 ? bk : null;
+  }
+  let h = '<table class="metT"><tr><th>Method</th><th>MAD</th><th>MSE</th><th>MAPE</th><th>periods</th></tr>';
+  for(const k of keys){
+    const a = accs[k];
+    h += `<tr><td><span class="dot" style="background:${COLORS[k]};display:inline-block;vertical-align:-1px;margin-right:7px"></span>${NAMES[k]}</td>`;
+    if(!a){ h += '<td>–</td><td>–</td><td>–</td><td>0</td></tr>'; continue; }
+    for(const c of cols){
+      const v = a[c];
+      h += `<td class="${best[c]===k?'best':''}">${v==null?'–':f2(v)+(c==='MAPE'?'%':'')}</td>`;
+    }
+    h += `<td>${a.n}</td></tr>`;
+  }
+  h += '</table>';
+  $('metricsBox').innerHTML = h;
+}
+
+function renderCalcTabs(){
+  const keys = activeKeys();
+  if(!keys.includes(state.tab)) state.tab = keys[0] || null;
+  $('calcTabs').innerHTML = keys.map(k =>
+    `<button class="${state.tab===k?'on':''}" data-tab="${k}">${NAMES[k]}</button>`).join('');
+  $('calcTabs').querySelectorAll('button').forEach(b =>
+    b.addEventListener('click', () => { state.tab = b.dataset.tab; renderCalcTabs(); renderCalc(); }));
+}
+
+function renderCalc(){
+  const k = state.tab;
+  if(!k || !results[k]){ $('calcBox').innerHTML = '<p class="hint">No method selected.</p>'; return; }
+  const A = state.A, n = A.length, r = results[k];
+  const heads = {
+    ma:  ['t','A<sub>t</sub>','F<sub>t</sub>'],
+    wma: ['t','A<sub>t</sub>','F<sub>t</sub>'],
+    es:  ['t','A<sub>t</sub>','F<sub>t</sub>'],
+    taf: ['t','A<sub>t</sub>','TAF<sub>t</sub>','S<sub>t</sub>','T<sub>t</sub>'],
+    hw:  ['t','A<sub>t</sub>','F<sub>t</sub>','L<sub>t</sub>','T<sub>t</sub>','S<sub>t</sub>'],
+  }[k];
+  let h = `<table class="calcT"><tr>${heads.map(x=>`<th>${x}</th>`).join('')}<th>e = A−F</th><th>|e|</th><th>e²</th><th>|e|/A %</th></tr>`;
+  for(let t=0;t<=n;t++){
+    const isNext = t === n;
+    const F = r.F[t];
+    let cells = [`${t+1}${isNext?' (next)':''}`, isNext ? '–' : f2s(A[t]), f2(F)];
+    if(k === 'taf') cells.push(isNext?'–':f2(r.S[t]), isNext?'–':f2(r.T[t]));
+    if(k === 'hw')  cells.push(isNext?'–':f2(r.L[t]), isNext?'–':f2(r.T[t]), isNext?'–':f2(r.S[t]));
+    let err = ['–','–','–','–'];
+    if(!isNext && F != null && t >= r.errStart){
+      const e = A[t]-F;
+      err = [f2(e), f2(Math.abs(e)), f2(e*e), A[t]!==0 ? f2(Math.abs(e)/A[t]*100) : '–'];
+    }
+    h += `<tr class="${isNext?'next':''}">${cells.map(x=>`<td>${x}</td>`).join('')}${err.map(x=>`<td>${x}</td>`).join('')}</tr>`;
+  }
+  h += '</table>';
+  $('calcBox').innerHTML = h;
+}
+
+/* ----- init ----- */
+buildWmaInputs(defaultWeights(4));
+applyPreset('level-high');
+</script>
+</body>
+</html>

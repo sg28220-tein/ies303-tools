@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sequencing &amp; Gantt Chart — IES 303</title>
+<!--
+  Sequencing / Gantt teaching tool — IES 303 Operations Management (SIIT), Lecture 09 Sequencing.
+  Standalone page: open directly in any browser, no server needed.
+  Single work center rules: FCFS, SPT, EDD, CR (dynamic), S/O  (+ LPT and Random, not in the lecture).
+  Two-machine flow shop: Johnson's rule.
+  Measures per deck slide 3: avg flow time = Sflow/n, avg tardiness = Stard/n, makespan, WIP = Sflow/makespan.
+-->
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --ok:#16a34a; --ok-soft:#f0fdf4;
+    --warn:#d97706; --warn-soft:#fffbeb;
+    --bad:#dc2626; --bad-soft:#fef2f2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);background:#fafafa;font-size:16px;line-height:1.5}
+  .wrap{max-width:1040px;margin:0 auto;padding:24px 20px 60px}
+  header h1{margin:0;font-size:29px;font-weight:700}
+  header .sub{margin:4px 0 20px;color:var(--muted)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 10px;font-size:19px}
+  .hidden{display:none !important}
+  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:10px 0}
+  label.fld{display:flex;align-items:center;gap:7px;font-weight:600;font-size:15px}
+  select,input[type=number]{font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  input[type=number]{width:82px;text-align:center}
+  button{font:inherit;font-weight:600;padding:8px 15px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:none;border-radius:0;padding:8px 14px;background:#fff;font-weight:600}
+  .seg button.on{background:var(--accent);color:#fff}
+  .hint{color:var(--muted);font-size:13.5px}
+
+  /* setup table */
+  table.jobT{border-collapse:collapse;margin:12px 0}
+  table.jobT th{font-size:13.5px;color:var(--muted);font-weight:600;padding:4px 8px;text-align:center}
+  table.jobT td{padding:3px}
+  table.jobT input.nm{width:86px;font:inherit;font-weight:700;text-align:center;border:1px solid transparent;border-radius:6px;padding:6px 4px;background:transparent}
+  table.jobT input.nm:focus{border-color:var(--line);background:#fff;outline:none}
+  table.jobT input.vv{width:86px;font:inherit;font-size:17px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:7px 4px}
+  table.jobT input.vv:focus{border-color:var(--accent);outline:none}
+  table.jobT td.swatch{width:16px}
+  table.jobT td.swatch span{display:block;width:13px;height:13px;border-radius:4px}
+
+  /* rules */
+  .rules{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 2px}
+  .rules button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .rules button .xtra{font-size:11px;opacity:.7;font-weight:600}
+
+  /* gantt */
+  #ganttBox{overflow-x:auto}
+  #ganttBox svg{display:block;width:100%;height:auto}
+  .glegend{display:flex;gap:16px;flex-wrap:wrap;font-size:13.5px;color:var(--muted);margin-top:2px}
+  .glegend span{display:inline-flex;align-items:center;gap:6px}
+  .glegend i{width:14px;height:12px;border-radius:3px;display:inline-block;font-style:normal}
+
+  /* sequence chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+  .chip{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;border:2px solid var(--line);background:#fff;font-weight:700;cursor:pointer;font-size:16px}
+  .chip.used{opacity:.35;cursor:not-allowed}
+  .chip.fixed{cursor:default}
+  .chip .sw{width:12px;height:12px;border-radius:3px}
+  .arrow{color:var(--muted);font-weight:700}
+  .seqLine{font-size:20px;font-weight:800;letter-spacing:.06em}
+
+  /* tables */
+  table.dataT{border-collapse:collapse;font-size:15.5px;margin:8px 0}
+  table.dataT th{background:#f8fafc;color:var(--muted);font-size:13.5px;padding:7px 14px;border:1px solid var(--line);white-space:nowrap}
+  table.dataT td{padding:6px 14px;border:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+  table.dataT td.jb{text-align:left;font-weight:700;white-space:nowrap}
+  table.dataT tr.sum td{background:#f8fafc;font-weight:800}
+  table.dataT td.given, table.dataT th.given{background:#f8fafc}
+  table.dataT td.tardy{color:var(--bad);font-weight:700}
+  table.dataT td input{width:78px;font:inherit;font-size:15.5px;text-align:center;border:1.5px solid var(--line);border-radius:7px;padding:5px 3px}
+  table.dataT td input.good{border-color:var(--ok);background:var(--ok-soft)}
+  table.dataT td input.badIn{border-color:var(--bad);background:var(--bad-soft)}
+  table.dataT td.best{background:var(--ok-soft);color:var(--ok);font-weight:800}
+  .measures{display:flex;flex-wrap:wrap;gap:22px;margin:10px 0}
+  .meas{background:var(--accent-soft);border-radius:10px;padding:10px 16px;min-width:150px}
+  .meas .lbl{font-size:13px;color:var(--muted);font-weight:600}
+  .meas .val{font-size:22px;font-weight:800;color:var(--accent)}
+  .meas .frm{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  .explain{background:var(--accent-soft);border-radius:10px;padding:13px 18px;margin:12px 0;font-size:16px}
+  .explain b{color:var(--accent)}
+  .practice{background:var(--warn-soft);border:1px solid #fde68a;border-radius:10px;padding:14px 18px;margin:12px 0}
+  .practice .q{font-weight:700;margin-bottom:8px}
+  .fb{margin-top:10px;font-weight:700}
+  .fb.good{color:var(--ok)} .fb.badFb{color:var(--bad)}
+  .okNote{color:var(--ok);font-weight:700;margin:10px 0;background:var(--ok-soft);border:1px solid #bbf7d0;border-radius:10px;padding:11px 16px;font-size:16.5px}
+  .okNote.neutral{color:var(--muted);background:#f8fafc;border-color:var(--line)}
+
+  /* CR / Johnson epoch panels */
+  .epoch{border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin:10px 0}
+  .epoch h4{margin:0 0 6px;font-size:15px}
+  .epoch .pick{color:var(--ok);font-weight:700}
+  table.slotT{border-collapse:collapse;margin:6px 0;font-size:16px}
+  table.slotT th{font-size:12.5px;color:var(--muted);padding:3px 6px;font-weight:600}
+  table.slotT td{border:1px solid var(--line);width:56px;height:42px;text-align:center;font-weight:800}
+  table.slotT td.f{background:var(--ok-soft)}
+  footer{color:var(--muted);font-size:13px;text-align:center;margin-top:26px}
+
+  /* ---- Mouse only: hover effects (on touch screens they stick after a tap) ---- */
+  @media (hover:hover){
+    button:hover{background:#f3f4f6}
+    button.primary:hover{background:#1d4ed8}
+    table.jobT input.nm:hover{border-color:var(--line);background:#fff}
+    .chip:hover{border-color:var(--accent)}
+  }
+
+  /* ---- Touch screens (iPad / iPhone). Desktop with a mouse is unaffected. ---- */
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+  @media (pointer:coarse){
+    /* iOS zooms in on any text box under 16px and does not zoom back out */
+    input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea{font-size:16px}
+    button, select, .chip{min-height:44px}
+  }
+
+  /* ---- Tablet portrait and phones: wide tables scroll inside their own box ---- */
+  @media screen and (max-width:820px){
+    table.dataT, table.jobT, table.slotT{display:block;max-width:100%;overflow-x:auto}
+  }
+
+  /* ---- Narrow screens (phones) ---- */
+  @media screen and (max-width:640px){
+    .wrap{padding:16px 12px 48px}
+    .card{padding:16px 12px;border-radius:12px}
+    header h1{font-size:24px}
+    select{max-width:100%}
+    label.fld{flex-wrap:wrap;max-width:100%}
+    label.fld select{min-width:0}
+    table.jobT input.nm, table.jobT input.vv{width:66px}
+    table.dataT th, table.dataT td{padding:6px 8px}
+    table.dataT th{white-space:normal;line-height:1.25}
+    table.dataT td input{width:64px}
+    /* keep the Gantt labels readable: scroll sideways rather than shrink to a third */
+    #ganttBox svg{min-width:640px}
+    .measures{gap:10px}
+    .meas{min-width:0;flex:1 1 140px}
+    .explain, .practice, .okNote{padding:12px 14px}
+    .epoch{padding:10px 10px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Sequencing &amp; Gantt Chart</h1>
+    <p class="sub">Priority rules · Johnson's rule · IES 303 Lecture 09</p>
+  </header>
+
+  <section class="card" id="setupCard">
+    <div class="row">
+      <span class="seg" id="segEnv">
+        <button data-v="single" class="on">Single work center</button>
+        <button data-v="flow">Two-machine flow shop</button>
+      </span>
+      <span class="seg" id="segMode">
+        <button data-v="guided" class="on">Guided — tool explains</button>
+        <button data-v="practice">Practice — you answer first</button>
+      </span>
+    </div>
+    <div class="row">
+      <label class="fld">Example
+        <select id="preset"></select>
+      </label>
+      <label class="fld">Jobs <input type="number" id="nJobs" min="2" max="8" value="6"></label>
+      <button id="btnRandom">Random values</button>
+    </div>
+    <div id="jobEditor"></div>
+    <p class="hint" id="setupHint"></p>
+    <div class="row">
+      <button id="btnStart" class="primary">Start ▶</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="workCard">
+    <h2 id="ruleHead">Choose a sequencing rule</h2>
+    <div class="rules" id="ruleBar"></div>
+    <div id="ruleNote" class="hint"></div>
+    <div id="stageArea"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="btnEdit">✎ Edit problem</button>
+      <button id="btnRestart">↺ Restart this rule</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="cmpCard">
+    <h2>Compare all rules</h2>
+    <div id="cmpBox"></div>
+    <p class="hint">Best value in each column is highlighted. Makespan on a single work center is always Σ processing time, so the rules differ only in flow time, tardiness and WIP.</p>
+  </section>
+
+  <footer>Sequencing &amp; Gantt teaching tool · IES 303 Operations Management · SIIT</footer>
+</div>
+
+<script id="solverScript">
+/* ================= pure sequencing model (unit-testable) ================= */
+
+/* jobs: [{name, p, due, ops, m1, m2}] — index order = arrival order */
+
+function seqFCFS(jobs){ return jobs.map((_,i)=>i); }
+
+function sortIdx(jobs, keyFn, desc){
+  return jobs.map((_,i)=>i).sort((a,b)=>{
+    const d = keyFn(jobs[a]) - keyFn(jobs[b]);
+    if(Math.abs(d) > 1e-9) return desc ? -d : d;
+    return a-b;                       // stable tie-break: arrival order
+  });
+}
+function seqSPT(jobs){ return sortIdx(jobs, j=>j.p, false); }
+function seqLPT(jobs){ return sortIdx(jobs, j=>j.p, true); }
+function seqEDD(jobs){ return sortIdx(jobs, j=>j.due, false); }
+
+/* Slack per operation: slack = due - remaining processing; ratio = slack / remaining ops */
+function soRatios(jobs){
+  return jobs.map(j => {
+    const slack = j.due - j.p;
+    const ops = j.ops > 0 ? j.ops : 1;
+    return {slack, ops, ratio: slack/ops};
+  });
+}
+function seqSO(jobs){
+  const r = soRatios(jobs);
+  return jobs.map((_,i)=>i).sort((a,b)=>{
+    const d = r[a].ratio - r[b].ratio;
+    if(Math.abs(d) > 1e-9) return d;
+    return a-b;
+  });
+}
+
+/* Critical ratio: CR = (due - now) / processing time, RECOMPUTED at each decision epoch,
+   lowest CR selected (deck slides 11-20). */
+function crTrace(jobs){
+  const n = jobs.length, left = jobs.map((_,i)=>i), order = [], epochs = [];
+  let t = 0;
+  while(left.length){
+    const rows = left.map(i => ({i, cr: (jobs[i].due - t) / jobs[i].p}));
+    let best = rows[0];
+    for(const r of rows) if(r.cr < best.cr - 1e-9) best = r;
+    epochs.push({t, rows: rows.map(r=>({i:r.i, cr:r.cr})), pick: best.i});
+    order.push(best.i);
+    t += jobs[best.i].p;
+    left.splice(left.indexOf(best.i), 1);
+  }
+  return {order, epochs};
+}
+function seqCR(jobs){ return crTrace(jobs).order; }
+
+/* Johnson's rule, 2-machine flow shop (deck slides 30-33).
+   "Select the job with shortest time. If the shortest time is at the first center schedule
+    that job first, but if at the second work center, schedule that job last."
+   Tie convention: when the minimum appears on machine 2 anywhere, it goes to the back.
+   (This reproduces all three worked examples in the deck.) */
+function johnsonTrace(jobs){
+  const left = jobs.map((_,i)=>i), front = [], back = [], steps = [];
+  while(left.length){
+    let min = Infinity;
+    for(const i of left) min = Math.min(min, jobs[i].m1, jobs[i].m2);
+    let pick = -1, where = null;
+    for(const i of left) if(Math.abs(jobs[i].m2 - min) < 1e-9){ pick = i; where = 'm2'; break; }
+    if(pick === -1) for(const i of left) if(Math.abs(jobs[i].m1 - min) < 1e-9){ pick = i; where = 'm1'; break; }
+    if(where === 'm1') front.push(pick); else back.unshift(pick);
+    steps.push({pick, where, min, front:front.slice(), back:back.slice(), left:left.slice()});
+    left.splice(left.indexOf(pick), 1);
+  }
+  return {order: front.concat(back), steps};
+}
+function seqJohnson(jobs){ return johnsonTrace(jobs).order; }
+
+const RULE_FN = {
+  FCFS: seqFCFS, SPT: seqSPT, EDD: seqEDD, CR: seqCR, SO: seqSO, LPT: seqLPT,
+};
+
+/* ---- evaluation: single work center, all jobs available at time 0 ---- */
+function evaluate(seq, jobs){
+  let t = 0, totFlow = 0, totTard = 0;
+  const rows = [];
+  for(const i of seq){
+    const j = jobs[i];
+    t += j.p;
+    const tard = Math.max(0, t - j.due);
+    totFlow += t; totTard += tard;
+    rows.push({i, name:j.name, p:j.p, flow:t, due:j.due, tard, start:t-j.p});
+  }
+  const n = seq.length, makespan = t;
+  return {
+    rows, totFlow, totTard, makespan, n,
+    avgFlow: n ? totFlow/n : 0,
+    avgTard: n ? totTard/n : 0,
+    wip: makespan ? totFlow/makespan : 0,
+  };
+}
+
+/* ---- evaluation: two-machine flow shop ---- */
+function flowShopSchedule(seq, jobs){
+  let e1 = 0, e2 = 0, idle = 0;
+  const rows = [];
+  for(const i of seq){
+    const j = jobs[i];
+    const s1 = e1, f1 = s1 + j.m1;
+    const s2 = Math.max(f1, e2), f2 = s2 + j.m2;
+    idle += s2 - e2;
+    rows.push({i, name:j.name, s1, f1, s2, f2, idleBefore: s2 - e2});
+    e1 = f1; e2 = f2;
+  }
+  return {rows, makespan: e2, m1Done: e1, idle};
+}
+
+/* validate a student sequence against a rule (accepts any tie-equivalent order) */
+function sequenceValid(rule, jobs, seq){
+  const n = jobs.length;
+  if(seq.length !== n || new Set(seq).size !== n) return false;
+  if(rule === 'FCFS') return seq.every((v,k)=>v===k);
+  if(rule === 'CR'){
+    let t = 0;
+    for(let k=0;k<n;k++){
+      const left = seq.slice(k);
+      let min = Infinity;
+      for(const i of left) min = Math.min(min, (jobs[i].due - t)/jobs[i].p);
+      const cr = (jobs[seq[k]].due - t)/jobs[seq[k]].p;
+      if(cr > min + 1e-9) return false;
+      t += jobs[seq[k]].p;
+    }
+    return true;
+  }
+  if(rule === 'JOHNSON') return johnsonMakespanOptimal(jobs, seq);
+  const key = rule === 'SPT' || rule === 'LPT' ? (j=>j.p)
+            : rule === 'EDD' ? (j=>j.due)
+            : (j=>{ const o = j.ops>0?j.ops:1; return (j.due - j.p)/o; });
+  for(let k=1;k<n;k++){
+    const a = key(jobs[seq[k-1]]), b = key(jobs[seq[k]]);
+    if(rule === 'LPT'){ if(a < b - 1e-9) return false; }
+    else if(a > b + 1e-9) return false;
+  }
+  return true;
+}
+/* a student flow-shop sequence is accepted if it achieves the optimal makespan */
+function johnsonMakespanOptimal(jobs, seq){
+  const best = flowShopSchedule(seqJohnson(jobs), jobs).makespan;
+  return Math.abs(flowShopSchedule(seq, jobs).makespan - best) < 1e-9;
+}
+</script>
+
+<script>
+/* ================= UI ================= */
+const $ = id => document.getElementById(id);
+const PALETTE = ['#2563eb','#16a34a','#ea580c','#9333ea','#0d9488','#dc2626','#ca8a04','#0891b2'];
+const MAXJ = 8;
+
+const RULES = {
+  FCFS:{label:'FCFS', full:'First come, first served'},
+  SPT :{label:'SPT',  full:'Shortest processing time'},
+  EDD :{label:'EDD',  full:'Earliest due date'},
+  CR  :{label:'CR',   full:'Critical ratio (recomputed each time)'},
+  SO  :{label:'S/O',  full:'Slack per operation'},
+  LPT :{label:'LPT',  full:'Longest processing time', extra:true},
+  RAND:{label:'Random', full:'Random order — no rule at all', extra:true},
+  JOHNSON:{label:"Johnson's rule", full:'Two-machine flow shop — minimise idle time'},
+};
+const SINGLE_RULES = ['FCFS','SPT','EDD','CR','SO','LPT','RAND'];
+
+const PRESETS = {
+  s4  : {env:'single', label:'Lecture example — 6 jobs (slide 4)',
+         jobs:[['A',2,7,1],['B',8,16,1],['C',4,4,1],['D',10,17,1],['E',5,15,1],['F',12,18,1]]},
+  s29 : {env:'single', label:'Exercise — 5 jobs (slide 29)',
+         jobs:[['A',12,15,1],['B',6,24,1],['C',14,20,1],['D',3,8,1],['E',7,6,1]]},
+  s25 : {env:'single', label:'S/O example — 6 jobs (slide 25)',
+         jobs:[['A',4,14,3],['B',16,32,6],['C',8,8,5],['D',20,34,2],['E',10,30,4],['F',18,30,2]]},
+  s28 : {env:'single', label:'S/O exercise — 4 jobs (slide 28)',
+         jobs:[['A',20,30,2],['B',11,18,5],['C',10,6,2],['D',16,23,4]]},
+  s30 : {env:'flow', label:"Johnson example — 6 jobs (slide 30)",
+         jobs:[['A',5,5],['B',4,3],['C',8,9],['D',2,7],['E',6,8],['F',12,15]]},
+  s36 : {env:'flow', label:'Johnson exercise — 5 jobs (slide 36)',
+         jobs:[['A',2.5,4.2],['B',3.8,1.5],['C',2.2,3.0],['D',5.8,4.0],['E',4.5,2.0]]},
+  s39 : {env:'flow', label:'Assignment — 7 jobs (slide 38/39)',
+         jobs:[['A',2,3],['B',4,3],['C',5,2],['D',4,5],['E',2,3],['F',3,1],['G',1,4]]},
+};
+
+const state = {
+  env:'single', mode:'guided', rule:'FCFS',
+  jobs: [],                         // {name,p,due,ops,m1,m2}
+  randSeq: null,                    // frozen random order
+};
+/* practice stages: 'calc'  — CR / S/O working table
+                    'seq'   — put the jobs in order (or Johnson's placements)
+                    'sched' — flow-shop Machine 2 schedule
+                    'done'  — results                                        */
+let stage = 'done';
+let userSeq = [];                   // student-built sequence
+let jstep = 0;                      // Johnson practice step
+let jFront = [], jBack = [];
+let crOrder = [];                   // CR: jobs chosen so far, epoch by epoch
+let crShown = false;                // CR: this epoch's values have been checked or revealed
+
+const f2 = v => v == null ? '–' : (Math.round(v*100)/100).toFixed(2);
+const num = v => Number.isInteger(v) ? String(v) : String(+v.toFixed(2));
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const colorOf = i => PALETTE[i % PALETTE.length];
+
+/* ---------- setup ---------- */
+function fillPresetSelect(){
+  $('preset').innerHTML = Object.entries(PRESETS)
+    .filter(([,p]) => p.env === state.env)
+    .map(([k,p]) => `<option value="${k}">${esc(p.label)}</option>`).join('')
+    + '<option value="custom">Custom</option>';
+}
+function applyPreset(key){
+  const p = PRESETS[key];
+  if(!p) return;
+  state.jobs = p.jobs.map(a => p.env === 'single'
+    ? {name:a[0], p:a[1], due:a[2], ops:a[3], m1:a[1], m2:Math.max(1,Math.round(a[1]/2))}
+    : {name:a[0], p:a[1], due:a[1]+a[2], ops:1, m1:a[1], m2:a[2]});
+  $('nJobs').value = state.jobs.length;
+  state.randSeq = null;
+  renderEditor();
+}
+function renderEditor(){
+  const single = state.env === 'single';
+  const heads = single ? ['Job','Processing time','Due date','Remaining ops']
+                       : ['Job','Machine 1 time','Machine 2 time'];
+  let h = '<table class="jobT"><tr><th></th>' + heads.map(x=>`<th>${x}</th>`).join('') + '</tr>';
+  state.jobs.forEach((j,i) => {
+    h += `<tr><td class="swatch"><span style="background:${colorOf(i)}"></span></td>`;
+    h += `<td><input class="nm" data-i="${i}" data-k="name" value="${esc(j.name)}"></td>`;
+    const keys = single ? ['p','due','ops'] : ['m1','m2'];
+    for(const k of keys)
+      h += `<td><input type="number" class="vv" step="any" min="0" data-i="${i}" data-k="${k}" value="${num(j[k])}"></td>`;
+    h += '</tr>';
+  });
+  h += '</table>';
+  $('jobEditor').innerHTML = h;
+  $('setupHint').innerHTML = single
+    ? 'All jobs are available at time 0. <b>Remaining ops</b> is used only by the S/O rule — leave it at 1 for the other rules.'
+    : 'Every job goes through Machine 1 then Machine 2, in the same order. Johnson\'s rule finds the sequence with the shortest makespan.';
+}
+$('jobEditor').addEventListener('input', e => {
+  const t = e.target, i = +t.dataset.i, k = t.dataset.k;
+  if(i === undefined || Number.isNaN(i)) return;
+  state.jobs[i][k] = k === 'name' ? t.value : (parseFloat(t.value) || 0);
+  if(state.env === 'single' && k === 'p') state.jobs[i].m1 = state.jobs[i].p;
+  $('preset').value = 'custom';
+});
+$('nJobs').addEventListener('change', e => {
+  const n = Math.max(2, Math.min(MAXJ, +e.target.value || 2));
+  e.target.value = n;
+  while(state.jobs.length < n){
+    const i = state.jobs.length;
+    state.jobs.push({name:String.fromCharCode(65+i), p:5, due:10, ops:1, m1:5, m2:4});
+  }
+  state.jobs.length = n;
+  state.randSeq = null;
+  $('preset').value = 'custom';
+  renderEditor();
+});
+$('btnRandom').addEventListener('click', () => {
+  const ri = (a,b) => a + Math.floor(Math.random()*(b-a+1));
+  state.jobs.forEach(j => {
+    if(state.env === 'single'){
+      j.p = ri(2,12); j.m1 = j.p;
+      j.due = ri(4, 6*state.jobs.length);
+      j.ops = ri(1,5);
+    } else { j.m1 = ri(1,12); j.m2 = ri(1,12); j.due = j.m1+j.m2; }
+  });
+  state.randSeq = null;
+  $('preset').value = 'custom';
+  renderEditor();
+});
+function segWire(id, fn){
+  $(id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    [...$(id).children].forEach(x => x.classList.toggle('on', x === b));
+    fn(b.dataset.v);
+  });
+}
+segWire('segEnv', v => {
+  state.env = v;
+  state.rule = v === 'single' ? 'FCFS' : 'JOHNSON';
+  fillPresetSelect();
+  applyPreset(v === 'single' ? 's4' : 's30');
+});
+segWire('segMode', v => { state.mode = v; });
+$('preset').addEventListener('change', e => { if(e.target.value !== 'custom') applyPreset(e.target.value); });
+$('btnStart').addEventListener('click', () => {
+  $('setupCard').classList.add('hidden');
+  $('workCard').classList.remove('hidden');
+  renderRuleBar();
+  selectRule(state.rule);
+});
+$('btnEdit').addEventListener('click', () => {
+  $('workCard').classList.add('hidden');
+  $('cmpCard').classList.add('hidden');
+  $('setupCard').classList.remove('hidden');
+});
+$('btnRestart').addEventListener('click', () => selectRule(state.rule));
+
+/* ---------- rule selection ---------- */
+function renderRuleBar(){
+  const keys = state.env === 'single' ? SINGLE_RULES : ['JOHNSON'];
+  $('ruleBar').innerHTML = keys.map(k =>
+    `<button data-r="${k}" class="${state.rule===k?'on':''}">${esc(RULES[k].label)}${RULES[k].extra?' <span class="xtra">not in lecture</span>':''}</button>`).join('');
+  $('ruleBar').querySelectorAll('button').forEach(b =>
+    b.addEventListener('click', () => selectRule(b.dataset.r)));
+}
+function ruleSeq(rule){
+  if(rule === 'JOHNSON') return seqJohnson(state.jobs);
+  if(rule === 'RAND'){
+    if(!state.randSeq || state.randSeq.length !== state.jobs.length){
+      const a = state.jobs.map((_,i)=>i);
+      for(let i=a.length-1;i>0;i--){ const k = Math.floor(Math.random()*(i+1)); [a[i],a[k]]=[a[k],a[i]]; }
+      state.randSeq = a;
+    }
+    return state.randSeq.slice();
+  }
+  return RULE_FN[rule](state.jobs);
+}
+function selectRule(r){
+  state.rule = r;
+  if(r === 'RAND') state.randSeq = null;
+  stage = firstStage();
+  userSeq = []; jstep = 0; jFront = []; jBack = [];
+  crOrder = []; crShown = false;
+  renderRuleBar();
+  $('ruleHead').textContent = RULES[r].label + ' — ' + RULES[r].full;
+  $('ruleNote').innerHTML = ruleNote(r);
+  render();
+}
+function ruleNote(r){
+  switch(r){
+    case 'FCFS': return 'Jobs are processed in the order they arrived — the order of the rows in your table.';
+    case 'SPT' : return 'Shortest job first. Provably gives the lowest average flow time on a single work center.';
+    case 'EDD' : return 'Earliest due date first.';
+    case 'CR'  : return 'CR = (time remaining until due date) ÷ (processing time). Recomputed <b>every time a job finishes</b>; the job with the <b>lowest</b> CR goes next.';
+    case 'SO'  : return 'Slack = due date − remaining processing time. Ratio = slack ÷ remaining number of operations. Smallest ratio first.';
+    case 'LPT' : return 'Longest job first — included as a counter-example; it is not one of the lecture rules.';
+    case 'RAND': return 'A shuffled order, for comparison. Press the button again to reshuffle.';
+    case 'JOHNSON': return 'Take the shortest time still on the table. If it is on <b>Machine 1</b>, the job goes to the <b>front</b>; if on <b>Machine 2</b>, it goes to the <b>back</b>. Ties here are broken toward Machine 2, which reproduces the lecture answers.';
+  }
+  return '';
+}
+
+/* ---------- render ---------- */
+/* the flow shop keeps a hands-on stage (working out when Machine 2 can start);
+   on a single work center the measures are pure arithmetic, so the tool fills them in. */
+function hasScheduleStage(){ return state.env !== 'single'; }
+
+/* CR and S/O cannot be sequenced by eye — the student must do the working first. */
+function needsCalcStage(){ return state.env === 'single' && (state.rule === 'CR' || state.rule === 'SO'); }
+
+function firstStage(){
+  if(state.mode !== 'practice') return 'done';
+  return needsCalcStage() ? 'calc' : 'seq';
+}
+
+function render(okText, neutral){
+  const area = $('stageArea');
+  let h = okText ? `<div class="okNote${neutral?' neutral':''}">${okText}</div>` : '';
+  if(stage === 'calc') h += (state.rule === 'CR' ? stageCRHTML() : stageSOHTML());
+  else if(stage === 'seq') h += stageSequenceHTML();
+  else if(stage === 'sched') h += stageFlowMeasuresHTML();
+  else h += fullResultHTML();
+  area.innerHTML = h;
+  wire();
+  syncCompare();
+}
+
+/* Keep the comparison table out of sight while a practice attempt is running —
+   it lists the sequence and the measures for every rule, which would give the answer away. */
+function syncCompare(){
+  const show = state.env === 'single' && (state.mode !== 'practice' || stage === 'done');
+  $('cmpCard').classList.toggle('hidden', !show);
+  if(show) renderCompare();
+}
+
+function seqChipsHTML(seq){
+  return seq.map((i,k) =>
+    `${k?'<span class="arrow">→</span>':''}<span class="chip fixed"><span class="sw" style="background:${colorOf(i)}"></span>${esc(state.jobs[i].name)}</span>`).join('');
+}
+
+/* --- guided / final result --- */
+function fullResultHTML(){
+  const seq = state.mode === 'practice' ? userSeq : ruleSeq(state.rule);
+  let h = '';
+  if(state.mode === 'guided') h += workingHTML(state.rule);
+  h += `<div class="explain">Sequence: <span class="seqLine">${seq.map(i=>esc(state.jobs[i].name)).join(' – ')}</span></div>`;
+  h += `<div class="chips">${seqChipsHTML(seq)}</div>`;
+  h += ganttHTML(seq);
+  h += state.env === 'single' ? measuresHTML(seq) : flowMeasuresHTML(seq);
+  return h;
+}
+
+/* working: how the rule produced the order */
+function workingHTML(rule){
+  if(rule === 'CR'){
+    const tr = crTrace(state.jobs);
+    let h = '<div class="explain">CR is recomputed at every decision point — watch the ratios change as the clock advances.</div>';
+    tr.epochs.forEach((ep,k) => {
+      h += `<div class="epoch"><h4>Decision ${k+1} — at day ${num(ep.t)}</h4>`;
+      h += '<table class="dataT"><tr><th>Job</th><th>(due − now) ÷ p</th><th>CR</th></tr>';
+      for(const r of ep.rows){
+        const j = state.jobs[r.i], isPick = r.i === ep.pick;
+        h += `<tr><td class="jb">${esc(j.name)}</td><td>(${num(j.due)} − ${num(ep.t)}) ÷ ${num(j.p)}</td>`+
+             `<td class="${isPick?'best':''}">${f2(r.cr)}</td></tr>`;
+      }
+      h += `</table><div class="pick">→ ${esc(state.jobs[ep.pick].name)} is selected next</div></div>`;
+    });
+    return h;
+  }
+  if(rule === 'SO') return soTableHTML('ranked');
+  if(rule === 'JOHNSON'){
+    const tr = johnsonTrace(state.jobs), n = state.jobs.length;
+    let h = '<div class="explain">Each step takes the shortest time left on the table.</div>';
+    tr.steps.forEach((s,k) => {
+      const j = state.jobs[s.pick];
+      h += `<div class="epoch"><h4>Step ${k+1} — shortest remaining time is ${num(s.min)} `+
+           `(job ${esc(j.name)}, ${s.where === 'm1' ? 'Machine 1' : 'Machine 2'})</h4>`;
+      h += `<div class="pick">→ ${s.where === 'm1' ? 'Machine 1 ⇒ place at the FRONT' : 'Machine 2 ⇒ place at the BACK'}</div>`;
+      h += slotTableHTML(s.front, s.back, n) + '</div>';
+    });
+    return h;
+  }
+  return '';
+}
+function slotTableHTML(front, back, n){
+  let h = '<table class="slotT"><tr>';
+  for(let k=0;k<n;k++) h += `<th>${k+1}</th>`;
+  h += '</tr><tr>';
+  for(let k=0;k<n;k++){
+    let cell = '';
+    if(k < front.length) cell = state.jobs[front[k]].name;
+    else if(k >= n - back.length) cell = state.jobs[back[k - (n - back.length)]].name;
+    h += `<td class="${cell?'f':''}">${esc(cell)}</td>`;
+  }
+  return h + '</tr></table>';
+}
+
+/* --- Gantt --- */
+function ganttHTML(seq){
+  return state.env === 'single' ? ganttSingle(seq) : ganttFlow(seq);
+}
+function axisTicks(vals, X, y){
+  let g = '', last = -1e9;
+  const sorted = [...new Set(vals)].sort((a,b)=>a-b);
+  for(const v of sorted){
+    const x = X(v);
+    if(x - last < 30) continue;
+    last = x;
+    g += `<line x1="${x.toFixed(1)}" y1="${y}" x2="${x.toFixed(1)}" y2="${y+5}" stroke="#9ca3af"/>`+
+         `<text x="${x.toFixed(1)}" y="${y+18}" text-anchor="middle" font-size="12" fill="#6b7280">${num(v)}</text>`;
+  }
+  return g;
+}
+function ganttSingle(seq){
+  const ev = evaluate(seq, state.jobs);
+  const W = 940, L = 96, R = 30, T = 24, BAR = 46;
+  const dueY = T + BAR + 12, axisY = dueY + 26, H = axisY + 30;
+  const maxT = Math.max(ev.makespan, ...state.jobs.map(j=>j.due)) * 1.02 || 1;
+  const X = t => L + t/maxT*(W-L-R);
+  let g = `<text x="${L-10}" y="${T+BAR/2+5}" text-anchor="end" font-size="14" font-weight="600" fill="#6b7280">Work center</text>`;
+  g += `<line x1="${L}" y1="${axisY}" x2="${W-R}" y2="${axisY}" stroke="#9ca3af"/>`;
+  const ticks = [0];
+  for(const r of ev.rows){
+    const x0 = X(r.start), x1 = X(r.flow), w = Math.max(1, x1-x0);
+    ticks.push(r.flow);
+    g += `<rect x="${x0.toFixed(1)}" y="${T}" width="${w.toFixed(1)}" height="${BAR}" rx="4" fill="${colorOf(r.i)}" opacity="0.88"/>`;
+    if(r.tard > 0){
+      const lx = X(Math.max(r.start, r.due));
+      g += `<rect x="${lx.toFixed(1)}" y="${T}" width="${Math.max(1,x1-lx).toFixed(1)}" height="${BAR}" rx="4" fill="url(#late)"/>`;
+    }
+    if(w > 22) g += `<text x="${((x0+x1)/2).toFixed(1)}" y="${T+BAR/2+6}" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">${esc(r.name)}</text>`;
+    // due-date marker
+    const dx = X(r.due);
+    g += `<polygon points="${dx-6},${dueY} ${dx+6},${dueY} ${dx},${dueY+9}" fill="${colorOf(r.i)}"/>`+
+         `<text x="${dx.toFixed(1)}" y="${dueY-3}" text-anchor="middle" font-size="11" font-weight="700" fill="${colorOf(r.i)}">${esc(r.name)}</text>`;
+  }
+  g += axisTicks(ticks, X, axisY);
+  g += `<text x="${W-R}" y="${T-8}" text-anchor="end" font-size="13" font-weight="700" fill="#111827">makespan = ${num(ev.makespan)}</text>`;
+  const defs = `<defs><pattern id="late" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="rgba(220,38,38,.35)"/><line x1="0" y1="0" x2="0" y2="7" stroke="#dc2626" stroke-width="3"/></pattern></defs>`;
+  return `<div id="ganttBox"><svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${defs}${g}</svg></div>`+
+    `<div class="glegend"><span><i style="background:#93c5fd"></i>job bar</span>`+
+    `<span><i style="background:rgba(220,38,38,.45)"></i>late portion (after due date)</span>`+
+    `<span>▼ due date marker</span></div>`;
+}
+function ganttFlow(seq){
+  const sc = flowShopSchedule(seq, state.jobs);
+  const W = 940, L = 96, R = 30, T = 24, BAR = 44, GAP = 20;
+  const row2 = T + BAR + GAP, axisY = row2 + BAR + 14, H = axisY + 32;
+  const maxT = sc.makespan * 1.02 || 1;
+  const X = t => L + t/maxT*(W-L-R);
+  let g = '';
+  g += `<text x="${L-10}" y="${T+BAR/2+5}" text-anchor="end" font-size="14" font-weight="600" fill="#6b7280">Process 1</text>`;
+  g += `<text x="${L-10}" y="${row2+BAR/2+5}" text-anchor="end" font-size="14" font-weight="600" fill="#6b7280">Process 2</text>`;
+  g += `<line x1="${L}" y1="${axisY}" x2="${W-R}" y2="${axisY}" stroke="#9ca3af"/>`;
+  const ticks = [0];
+  for(const r of sc.rows){
+    ticks.push(r.f1, r.s2, r.f2);
+    const bar = (x0,x1,y,name) => {
+      const w = Math.max(1, X(x1)-X(x0));
+      let s = `<rect x="${X(x0).toFixed(1)}" y="${y}" width="${w.toFixed(1)}" height="${BAR}" rx="4" fill="${colorOf(r.i)}" opacity="0.88"/>`;
+      if(w > 20) s += `<text x="${((X(x0)+X(x1))/2).toFixed(1)}" y="${y+BAR/2+6}" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">${esc(name)}</text>`;
+      return s;
+    };
+    g += bar(r.s1, r.f1, T, r.name);
+    if(r.idleBefore > 1e-9){
+      const x0 = X(r.s2 - r.idleBefore), w = Math.max(1, X(r.s2)-x0);
+      g += `<rect x="${x0.toFixed(1)}" y="${row2}" width="${w.toFixed(1)}" height="${BAR}" fill="url(#idle)"/>`;
+    }
+    g += bar(r.s2, r.f2, row2, r.name);
+  }
+  g += axisTicks(ticks, X, axisY);
+  g += `<line x1="${X(sc.makespan).toFixed(1)}" y1="${T-6}" x2="${X(sc.makespan).toFixed(1)}" y2="${axisY}" stroke="#111827" stroke-dasharray="4 3"/>`;
+  g += `<text x="${W-R}" y="${T-10}" text-anchor="end" font-size="13" font-weight="700" fill="#111827">makespan = ${num(sc.makespan)}</text>`;
+  const defs = `<defs><pattern id="idle" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="#f3f4f6"/><line x1="0" y1="0" x2="0" y2="7" stroke="#d1d5db" stroke-width="3"/></pattern></defs>`;
+  return `<div id="ganttBox"><svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${defs}${g}</svg></div>`+
+    `<div class="glegend"><span><i style="background:#e5e7eb"></i>Machine 2 idle — waiting for Machine 1</span>`+
+    `<span>Total idle on Machine 2 = ${num(sc.idle)}</span></div>`;
+}
+
+/* --- measures --- */
+function measuresHTML(seq){
+  const ev = evaluate(seq, state.jobs);
+  let h = '<table class="dataT"><tr><th>Job</th><th>Processing time</th><th>Flow Time</th><th>Due Date</th><th>Tardiness</th></tr>';
+  for(const r of ev.rows){
+    h += `<tr><td class="jb">${esc(r.name)}</td><td>${num(r.p)}</td><td>${num(r.flow)}</td>`+
+         `<td>${num(r.due)}</td><td class="${r.tard>0?'tardy':''}">${num(r.tard)}</td></tr>`;
+  }
+  h += `<tr class="sum"><td class="jb">Σ</td><td>${num(ev.makespan)}</td><td>${num(ev.totFlow)}</td><td></td><td>${num(ev.totTard)}</td></tr></table>`;
+  h += `<div class="measures">
+    <div class="meas"><div class="lbl">Average flow time</div><div class="val">${f2(ev.avgFlow)}</div><div class="frm">${num(ev.totFlow)} ÷ ${ev.n}</div></div>
+    <div class="meas"><div class="lbl">Average tardiness</div><div class="val">${f2(ev.avgTard)}</div><div class="frm">${num(ev.totTard)} ÷ ${ev.n}</div></div>
+    <div class="meas"><div class="lbl">Makespan</div><div class="val">${num(ev.makespan)}</div><div class="frm">Σ processing time</div></div>
+    <div class="meas"><div class="lbl">WIP (avg jobs)</div><div class="val">${f2(ev.wip)}</div><div class="frm">${num(ev.totFlow)} ÷ ${num(ev.makespan)}</div></div></div>`;
+  return h;
+}
+function flowMeasuresHTML(seq){
+  const sc = flowShopSchedule(seq, state.jobs);
+  let h = '<table class="dataT"><tr><th class="given">Job</th><th class="given">M1 time</th><th class="given">M2 time</th>'+
+          '<th>M1 start</th><th>M1 finish</th><th>M2 start</th><th>M2 finish</th><th>M2 idle before</th></tr>';
+  for(const r of sc.rows){
+    const j = state.jobs[r.i];
+    h += `<tr><td class="jb given">${esc(r.name)}</td><td class="given">${num(j.m1)}</td><td class="given">${num(j.m2)}</td>`+
+         `<td>${num(r.s1)}</td><td>${num(r.f1)}</td>`+
+         `<td>${num(r.s2)}</td><td>${num(r.f2)}</td><td class="${r.idleBefore>0?'tardy':''}">${num(r.idleBefore)}</td></tr>`;
+  }
+  h += '</table>';
+  h += `<div class="measures">
+    <div class="meas"><div class="lbl">Makespan</div><div class="val">${num(sc.makespan)}</div><div class="frm">M2 finish of last job</div></div>
+    <div class="meas"><div class="lbl">Machine 2 idle</div><div class="val">${num(sc.idle)}</div><div class="frm">waiting for Machine 1</div></div>
+    <div class="meas"><div class="lbl">Machine 1 finishes</div><div class="val">${num(sc.m1Done)}</div><div class="frm">Σ Machine 1 times</div></div></div>`;
+  h += `<div class="explain">M2 start = <b>max</b>(this job's M1 finish, previous job's M2 finish) — that maximum is where the idle time comes from.</div>`;
+  return h;
+}
+
+/* --- S/O working table, shared by guided and practice ---
+   mode: 'input'  slack + ratio are blank boxes
+         'filled' slack + ratio worked out
+         'ranked' as 'filled' plus the rank column  */
+function soTableHTML(mode){
+  const r = soRatios(state.jobs);
+  const ranked = mode === 'ranked', input = mode === 'input';
+  const rank = {};
+  if(ranked) seqSO(state.jobs).forEach((i,k) => rank[i] = k+1);
+  let h = '<table class="dataT"><tr><th class="given">Job</th><th class="given">Remaining processing (1)</th>'+
+          '<th class="given">Due date (2)</th><th>Slack (3) = (2)−(1)</th>'+
+          '<th class="given">Remaining ops (4)</th><th>Ratio (3)÷(4)</th>'+(ranked?'<th>Rank</th>':'')+'</tr>';
+  state.jobs.forEach((j,i) => {
+    h += `<tr><td class="jb given">${esc(j.name)}</td><td class="given">${num(j.p)}</td><td class="given">${num(j.due)}</td>`;
+    h += input ? `<td><input type="number" step="any" data-so="slack" data-i="${i}"></td>`
+               : `<td>${num(j.due)} − ${num(j.p)} = ${num(r[i].slack)}</td>`;
+    h += `<td class="given">${num(r[i].ops)}</td>`;
+    h += input ? `<td><input type="number" step="any" data-so="ratio" data-i="${i}"></td>`
+               : `<td>${f2(r[i].ratio)}</td>`;
+    if(ranked) h += `<td class="${rank[i]===1?'best':''}">${rank[i]}</td>`;
+    h += '</tr>';
+  });
+  return h + '</table>';
+}
+
+/* --- practice stage 'calc' for S/O --- */
+function stageSOHTML(){
+  let h = `<div class="practice"><div class="q">Step 1 — work out the slack and the ratio</div>
+    Slack = due date − remaining processing time. &nbsp; Ratio = slack ÷ remaining number of operations.
+    <div class="row"><button class="primary" id="soCheck">Check</button><button id="pReveal">Show answer</button></div>
+    <div class="hint" style="margin-top:6px">The comparison table is hidden until you answer.</div>
+    <div class="fb" id="pFb"></div></div>`;
+  return h + soTableHTML('input');
+}
+
+/* --- practice stage 'calc' for CR: one decision epoch at a time (deck slides 11-20) --- */
+function crClock(){ let t = 0; for(const i of crOrder) t += state.jobs[i].p; return t; }
+function crRemaining(){
+  const picked = new Set(crOrder);
+  return state.jobs.map((_,i)=>i).filter(i => !picked.has(i));
+}
+function stageCRHTML(){
+  const t = crClock(), left = crRemaining(), n = state.jobs.length;
+  const only = left.length === 1;
+  let h = `<div class="practice"><div class="q">Decision ${crOrder.length+1} of ${n} — the clock is at day ${num(t)}</div>`;
+  if(only){
+    h += `Only <b>${esc(state.jobs[left[0]].name)}</b> is left, so it goes last.
+      <div class="row"><button class="primary" id="crLast">Finish</button></div>`;
+  } else {
+    h += `CR is <b>recomputed every time a job finishes</b>. Click the job that goes next — the one with the
+      <b>lowest</b> CR = (due date − ${num(t)}) ÷ processing time.
+      <div class="chips">` +
+      left.map(i => `<span class="chip" data-crpick="${i}"><span class="sw" style="background:${colorOf(i)}"></span>${esc(state.jobs[i].name)}</span>`).join('') +
+      `</div>
+      <div class="hint">Working out the CR column below is optional — use it when the answer is not obvious, then press Check.</div>
+      <div class="row"><button id="crCheck"${crShown?' disabled':''}>Check my CR values</button><button id="pReveal">Show CR values</button></div>`;
+  }
+  h += '<div class="fb" id="pFb"></div></div>';
+
+  h += `<table class="dataT"><tr><th class="given">Job</th><th class="given">Processing time</th>`+
+       `<th class="given">Due date</th><th>CR = (due − ${num(t)}) ÷ p</th></tr>`;
+  for(const i of left){
+    const j = state.jobs[i], cr = (j.due - t)/j.p;
+    h += `<tr><td class="jb given">${esc(j.name)}</td><td class="given">${num(j.p)}</td><td class="given">${num(j.due)}</td>`;
+    h += (crShown || only) ? `<td>${f2(cr)}</td>`
+                           : `<td><input type="number" step="any" data-cr="${i}"></td>`;
+    h += '</tr>';
+  }
+  h += '</table>';
+  if(crOrder.length) h += `<div class="chips">Sequence so far: ${seqChipsHTML(crOrder)}</div>`;
+  return h;
+}
+
+/* --- practice stage 'seq': build the sequence --- */
+function stageSequenceHTML(){
+  if(state.rule === 'JOHNSON') return stageJohnsonHTML();
+  const stepNo = needsCalcStage() ? 2 : 1;
+  let h = `<div class="practice"><div class="q">Step ${stepNo} — build the ${esc(RULES[state.rule].label)} sequence</div>
+    ${state.rule === 'SO' ? 'Click the jobs in order of their ratio — <b>smallest first</b>.'
+                          : 'Click the jobs in the order the rule puts them.'}`;
+  h += '<div class="chips" style="margin-top:10px">';
+  state.jobs.forEach((j,i) => {
+    const used = userSeq.includes(i);
+    h += `<span class="chip ${used?'used':''}" data-pick="${i}"><span class="sw" style="background:${colorOf(i)}"></span>${esc(j.name)}</span>`;
+  });
+  h += '</div>';
+  h += `<div class="chips">Your sequence: ${userSeq.length ? seqChipsHTML(userSeq) : '<span class="hint">— nothing yet —</span>'}</div>`;
+  h += `<div class="row"><button id="pUndo">Undo</button><button id="pClear">Clear</button>
+        <button class="primary" id="pCheck">Check</button><button id="pReveal">Show answer</button></div>
+        <div class="hint" style="margin-top:6px">The comparison table is hidden until you answer — it lists every rule's sequence.</div>
+        <div class="fb" id="pFb"></div></div>`;
+  // S/O keeps its completed working table on screen so the ratios can be read off it
+  h += state.rule === 'SO' ? soTableHTML('filled') : jobRefTable();
+  return h;
+}
+function jobRefTable(){
+  const single = state.env === 'single';
+  let h = '<table class="dataT"><tr><th>Job</th>' +
+    (single ? '<th>Processing time</th><th>Due date</th><th>Remaining ops</th>' : '<th>Machine 1</th><th>Machine 2</th>') + '</tr>';
+  state.jobs.forEach(j => {
+    h += `<tr><td class="jb">${esc(j.name)}</td>` +
+      (single ? `<td>${num(j.p)}</td><td>${num(j.due)}</td><td>${num(j.ops)}</td>`
+              : `<td>${num(j.m1)}</td><td>${num(j.m2)}</td>`) + '</tr>';
+  });
+  return h + '</table>';
+}
+
+/* --- practice stage 1 for Johnson: step-by-step placement --- */
+function stageJohnsonHTML(){
+  const n = state.jobs.length;
+  const placed = new Set([...jFront, ...jBack]);
+  const left = state.jobs.map((_,i)=>i).filter(i=>!placed.has(i));
+  let h = `<div class="practice"><div class="q">Step ${jstep+1} — Johnson's rule</div>
+    Among the jobs still on the table, click the one with the <b>shortest time</b>, then say whether it goes to the front or the back.`;
+  h += '<div class="chips" style="margin-top:10px">';
+  left.forEach(i => h += `<span class="chip" data-jpick="${i}"><span class="sw" style="background:${colorOf(i)}"></span>${esc(state.jobs[i].name)}</span>`);
+  h += '</div>';
+  h += `<div class="row"><button id="pReveal">Show answer</button></div><div class="fb" id="pFb"></div></div>`;
+  h += slotTableHTML(jFront, jBack, n);
+  h += '<table class="dataT"><tr><th>Job</th><th>Machine 1</th><th>Machine 2</th></tr>';
+  left.forEach(i => { const j = state.jobs[i];
+    h += `<tr><td class="jb">${esc(j.name)}</td><td>${num(j.m1)}</td><td>${num(j.m2)}</td></tr>`; });
+  h += '</table>';
+  return h;
+}
+
+/* --- practice stage 2 (flow shop only): work out the Machine 2 schedule --- */
+function stageFlowMeasuresHTML(){
+  const seq = userSeq, sc = flowShopSchedule(seq, state.jobs);
+  let h = `<div class="practice"><div class="q">Step 2 — build the schedule</div>
+    M1 is filled in for you. For each job work out when <b>Machine 2</b> can start and finish.
+    Remember M2 cannot start before M1 has finished that job <i>and</i> before M2 has finished the previous one.
+    <div class="row"><button class="primary" id="mCheck">Check</button><button id="pReveal">Show answer</button></div>
+    <div class="fb" id="pFb"></div></div>`;
+  h += '<table class="dataT"><tr><th class="given">Job</th><th class="given">M1 time</th><th class="given">M2 time</th>'+
+       '<th>M1 start</th><th>M1 finish</th><th>M2 start</th><th>M2 finish</th></tr>';
+  sc.rows.forEach((r,k) => {
+    const j = state.jobs[r.i];
+    h += `<tr><td class="jb given">${esc(r.name)}</td><td class="given">${num(j.m1)}</td><td class="given">${num(j.m2)}</td>`+
+         `<td>${num(r.s1)}</td><td>${num(r.f1)}</td>`+
+         `<td><input type="number" step="any" data-m="s2" data-k="${k}"></td>`+
+         `<td><input type="number" step="any" data-m="f2" data-k="${k}"></td></tr>`;
+  });
+  h += '</table><p class="hint">Shaded columns are the given data, in the sequence you found. M2 finish = M2 start + M2 time.</p>';
+  h += `<div class="measures"><div class="meas"><div class="lbl">Makespan</div><input type="number" step="any" data-m="makespan"></div></div>`;
+  return h;
+}
+
+/* ---------- wiring ---------- */
+function feedback(msg, good){
+  const fb = $('pFb');
+  if(fb){ fb.textContent = msg; fb.className = 'fb ' + (good ? 'good' : 'badFb'); }
+}
+const near = (a,b) => Math.abs(a-b) < 0.011;
+
+function wire(){
+  $('stageArea').querySelectorAll('[data-pick]').forEach(el => el.addEventListener('click', () => {
+    const i = +el.dataset.pick;
+    if(userSeq.includes(i)) return;
+    userSeq.push(i); render();
+  }));
+  $('stageArea').querySelectorAll('[data-jpick]').forEach(el => el.addEventListener('click', () => {
+    johnsonPick(+el.dataset.jpick);
+  }));
+  $('stageArea').querySelectorAll('[data-crpick]').forEach(el => el.addEventListener('click', () => {
+    crPick(+el.dataset.crpick);
+  }));
+  const soc = $('soCheck'), crc = $('crCheck'), crl = $('crLast');
+  if(soc) soc.addEventListener('click', checkSO);
+  if(crc) crc.addEventListener('click', checkCR);
+  if(crl) crl.addEventListener('click', crFinish);
+  const undo = $('pUndo'), clr = $('pClear'), chk = $('pCheck'), rev = $('pReveal'), mchk = $('mCheck');
+  if(undo) undo.addEventListener('click', () => { userSeq.pop(); render(); });
+  if(clr)  clr.addEventListener('click', () => { userSeq = []; render(); });
+  if(chk)  chk.addEventListener('click', checkSequence);
+  if(mchk) mchk.addEventListener('click', checkMeasures);
+  if(rev)  rev.addEventListener('click', revealStage);
+}
+
+function revealStage(){
+  const seqNames = seq => seq.map(i => state.jobs[i].name).join(' – ');
+  if(stage === 'calc'){
+    if(state.rule === 'CR'){
+      // reveal only the current epoch, so the student can carry on from there
+      crShown = true;
+      render(`CR values shown for day ${num(crClock())} — now pick the job with the lowest CR.`, true);
+    } else {
+      stage = 'seq';
+      render('Answer shown — the slack and ratio are filled in below.', true);
+    }
+    return;
+  }
+  if(stage === 'seq'){
+    userSeq = ruleSeq(state.rule);
+    if(state.rule === 'JOHNSON'){ jFront = []; jBack = []; jstep = state.jobs.length; }
+    stage = hasScheduleStage() ? 'sched' : 'done';
+    render(`Answer shown — the ${esc(RULES[state.rule].label)} sequence is <b>${esc(seqNames(userSeq))}</b>.`, true);
+    return;
+  }
+  stage = 'done';
+  render('Answer shown.', true);
+}
+
+function checkSO(){
+  const r = soRatios(state.jobs);
+  let allGood = true;
+  [...$('stageArea').querySelectorAll('input[data-so]')].forEach(inp => {
+    const i = +inp.dataset.i;
+    const want = inp.dataset.so === 'slack' ? r[i].slack : r[i].ratio;
+    const ok = near(parseFloat(inp.value), want);
+    inp.classList.toggle('good', ok); inp.classList.toggle('badIn', !ok);
+    if(!ok) allGood = false;
+  });
+  if(allGood){ stage = 'seq'; render('✓ Slack and ratio are correct. Now put the jobs in order.'); }
+  else feedback('The red boxes are not right yet — slack = due date − remaining processing time, then divide by the remaining operations.', false);
+}
+
+function checkCR(){
+  const t = crClock();
+  const ins = [...$('stageArea').querySelectorAll('input[data-cr]')];
+  if(ins.every(inp => inp.value.trim() === '')){
+    feedback('Type the CR values first — or just click the job you think goes next.', false);
+    return;
+  }
+  let allGood = true;
+  ins.forEach(inp => {
+    const j = state.jobs[+inp.dataset.cr];
+    const ok = near(parseFloat(inp.value), (j.due - t)/j.p);
+    inp.classList.toggle('good', ok); inp.classList.toggle('badIn', !ok);
+    if(!ok) allGood = false;
+  });
+  if(allGood){ crShown = true; render(`✓ CR values correct for day ${num(t)}. Now pick the job.`); }
+  else feedback(`The red boxes are not right — CR = (due date − ${num(t)}) ÷ processing time. CR can be negative once a job is already past its due date.`, false);
+}
+
+function crPick(i){
+  const t = crClock(), left = crRemaining();
+  let min = Infinity;
+  for(const k of left) min = Math.min(min, (state.jobs[k].due - t)/state.jobs[k].p);
+  const cr = (state.jobs[i].due - t)/state.jobs[i].p;
+  if(cr > min + 1e-9){ feedback(`${state.jobs[i].name} has CR ${f2(cr)}, but ${f2(min)} is lower — CR picks the smallest.`, false); return; }
+  crOrder.push(i);
+  crShown = false;
+  render(`✓ Correct — ${esc(state.jobs[i].name)} has the lowest CR at day ${num(t)} (${f2(cr)}), so it is processed next.`);
+}
+
+function crFinish(){
+  crOrder.push(crRemaining()[0]);
+  userSeq = crOrder.slice();
+  stage = 'done';
+  const names = userSeq.map(i => state.jobs[i].name).join(' – ');
+  render(`✓ Complete — the CR sequence is <b>${esc(names)}</b>. The chart and measures below follow from it.`);
+}
+
+function checkSequence(){
+  if(userSeq.length !== state.jobs.length){
+    feedback(`Pick all ${state.jobs.length} jobs — you have ${userSeq.length} so far.`, false); return;
+  }
+  if(sequenceValid(state.rule, state.jobs, userSeq)){
+    stage = hasScheduleStage() ? 'sched' : 'done';
+    const names = userSeq.map(i => state.jobs[i].name).join(' – ');
+    render(`✓ Correct — <b>${esc(names)}</b> is the ${esc(RULES[state.rule].label)} sequence.`
+      + (stage === 'sched' ? ' Now build the schedule below.' : ' The table, chart and measures below are worked out from it.'));
+  }
+  else feedback('That is not the order this rule gives. Check the rule description above and try again.', false);
+}
+
+function johnsonPick(i){
+  const placed = new Set([...jFront, ...jBack]);
+  const left = state.jobs.map((_,k)=>k).filter(k=>!placed.has(k));
+  let min = Infinity;
+  for(const k of left) min = Math.min(min, state.jobs[k].m1, state.jobs[k].m2);
+  const j = state.jobs[i];
+  if(!near(Math.min(j.m1, j.m2), min)){
+    feedback(`Job ${j.name}'s shortest time is ${num(Math.min(j.m1,j.m2))}, but ${num(min)} is still on the table.`, false);
+    return;
+  }
+  const onM1 = near(j.m1, min), onM2 = near(j.m2, min);
+  const ask = document.createElement('div');
+  ask.className = 'row';
+  ask.innerHTML = `<b>${esc(j.name)}: shortest time ${num(min)} — where does it go?</b>
+    <button id="jF">Front</button><button id="jB">Back</button>`;
+  const box = $('stageArea').querySelector('.practice');
+  const old = box.querySelector('.placeAsk'); if(old) old.remove();
+  ask.classList.add('placeAsk');
+  box.appendChild(ask);
+  const place = (front) => {
+    const ok = front ? onM1 : onM2;
+    if(!ok){
+      feedback(`The ${num(min)} is on ${onM1?'Machine 1':'Machine 2'}, so this job goes to the ${onM1?'front':'back'}.`, false);
+      return;
+    }
+    // deck convention: a tie between the job's own M1 and M2 goes to the back
+    if(front) jFront.push(i); else jBack.unshift(i);
+    jstep++;
+    if(jFront.length + jBack.length === state.jobs.length){
+      userSeq = jFront.concat(jBack);
+      stage = 'sched';
+      const names = userSeq.map(k => state.jobs[k].name).join(' – ');
+      render(`✓ Correct — every job placed. Johnson's sequence is <b>${esc(names)}</b>. Now build the schedule below.`);
+    } else {
+      render(`✓ Correct — ${esc(j.name)} (shortest time ${num(min)} on ${onM1 && front ? 'Machine 1' : 'Machine 2'}) goes to the ${front ? 'front' : 'back'}.`);
+    }
+  };
+  $('jF').addEventListener('click', () => place(true));
+  $('jB').addEventListener('click', () => place(false));
+}
+
+function checkMeasures(){
+  const ins = [...$('stageArea').querySelectorAll('input[data-m]')];
+  let allGood = true;
+  const mark = (inp, ok) => { inp.classList.toggle('good', ok); inp.classList.toggle('badIn', !ok); if(!ok) allGood = false; };
+  const sc = flowShopSchedule(userSeq, state.jobs);
+  for(const inp of ins){
+    const v = parseFloat(inp.value), m = inp.dataset.m, k = +inp.dataset.k;
+    if(m === 's2') mark(inp, near(v, sc.rows[k].s2));
+    else if(m === 'f2') mark(inp, near(v, sc.rows[k].f2));
+    else if(m === 'makespan') mark(inp, near(v, sc.makespan));
+  }
+  if(allGood){
+    stage = 'done';
+    render('✓ Schedule correct. Here is the finished Gantt chart — notice where Machine 2 sits idle.');
+  }
+  else feedback('The red boxes are not right yet — fix them and check again.', false);
+}
+
+/* ---------- comparison table ---------- */
+function renderCompare(){
+  const rows = [];
+  for(const k of SINGLE_RULES){
+    const ev = evaluate(ruleSeq(k), state.jobs);
+    rows.push({k, ev});
+  }
+  const cols = [['avgFlow','Average flow time'],['avgTard','Average tardiness'],['wip','Average WIP']];
+  const best = {};
+  for(const [c] of cols){
+    let bv = Infinity, bk = null;
+    for(const r of rows) if(r.ev[c] < bv - 1e-9){ bv = r.ev[c]; bk = r.k; }
+    best[c] = bk;
+  }
+  let h = '<table class="dataT"><tr><th>Rule</th><th>Sequence</th>' +
+    cols.map(([,l])=>`<th>${l}</th>`).join('') + '<th>Makespan</th></tr>';
+  for(const r of rows){
+    h += `<tr><td class="jb">${esc(RULES[r.k].label)}${RULES[r.k].extra?' <span class="hint">(not in lecture)</span>':''}</td>`+
+         `<td class="jb" style="font-weight:600">${r.ev.rows.map(x=>esc(x.name)).join('-')}</td>`;
+    for(const [c] of cols) h += `<td class="${best[c]===r.k?'best':''}">${f2(r.ev[c])}</td>`;
+    h += `<td>${num(r.ev.makespan)}</td></tr>`;
+  }
+  $('cmpBox').innerHTML = h + '</table>';
+}
+
+/* ---------- init ---------- */
+fillPresetSelect();
+applyPreset('s4');
+</script>
+</body>
+</html>

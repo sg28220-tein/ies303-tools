@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hungarian Method — Student Practice</title>
+<!--
+  Hungarian Method — STUDENT PRACTICE version — IES 303 Operations Management (SIIT)
+  Standalone page: open directly in any browser, no server needed.
+  Practice only: the student solves every step themselves (no guided auto-answers).
+  This is the student twin of 08_hungarian-method.html — keep the two in sync if the solver changes.
+-->
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --ok:#16a34a; --ok-soft:#f0fdf4;
+    --warn:#d97706; --warn-soft:#fffbeb;
+    --bad:#dc2626; --bad-soft:#fef2f2;
+    --chg:#fef9c3; --dummy:#f3f4f6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);background:#fafafa;font-size:17px;line-height:1.5}
+  .wrap{max-width:980px;margin:0 auto;padding:24px 20px 60px}
+  header h1{margin:0;font-size:30px;font-weight:700}
+  header .sub{margin:4px 0 20px;color:var(--muted)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .hidden{display:none !important}
+  .row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:10px 0}
+  label.fld{display:flex;align-items:center;gap:8px;font-weight:600}
+  select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  button{font:inherit;font-weight:600;padding:9px 16px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:none;border-radius:0;padding:8px 14px;background:#fff;font-weight:600}
+  .seg button.on{background:var(--accent);color:#fff}
+  .hint{color:var(--muted);font-size:14px}
+
+  /* editor */
+  table.editT{border-collapse:collapse;margin:12px 0}
+  table.editT th, table.editT td{padding:3px}
+  table.editT input.hdr{width:96px;font:inherit;font-weight:600;border:1px solid transparent;border-radius:6px;padding:5px 6px;background:transparent;text-align:center}
+  table.editT input.hdr:focus{border-color:var(--line);background:#fff;outline:none}
+  table.editT input.valIn{width:76px;font:inherit;font-size:18px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:8px 4px}
+  table.editT input.valIn:focus{border-color:var(--accent);outline:none}
+
+  /* walkthrough matrix */
+  .stepHead{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+  .stepHead h2{margin:0;font-size:23px}
+  .badge{background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:14px;padding:4px 12px;border-radius:999px;white-space:nowrap}
+  #matrixArea{overflow-x:auto;padding:6px 0}
+  table.mx{border-collapse:collapse;margin:8px auto}
+  table.mx th{font-weight:600;font-size:15px;color:var(--muted);padding:6px 8px}
+  table.mx th.rh{text-align:right;padding-right:12px}
+  table.mx th.lineOn{color:var(--bad);font-weight:800}
+  table.mx th.clickable{cursor:pointer;border-radius:8px}
+  table.mx td.cell{position:relative;width:64px;height:56px;text-align:center;border:1px solid var(--line);font-size:20px;background:#fff}
+  table.mx td.cell .val{display:inline-block;min-width:40px;padding:3px 5px;border-radius:999px;border:2.5px solid transparent}
+  table.mx td.zero .val{color:var(--accent);font-weight:800}
+  table.mx td.chg{background:var(--chg)}
+  table.mx td.down{background:#dcfce7}
+  table.mx td.up{background:#ffedd5}
+  table.mx td.dummy{background:var(--dummy);color:var(--muted);font-style:italic}
+  table.mx td.asg .val{border-color:var(--ok);background:var(--ok-soft)}
+  table.mx td.sel .val{border-color:var(--accent);border-style:dashed;background:var(--accent-soft)}
+  table.mx td.clickableCell{cursor:pointer}
+  table.mx td.covR::after{content:'';position:absolute;left:-1px;right:-1px;top:50%;height:5px;margin-top:-2.5px;background:rgba(220,38,38,.42);pointer-events:none}
+  table.mx td.covC::before{content:'';position:absolute;top:-1px;bottom:-1px;left:50%;width:5px;margin-left:-2.5px;background:rgba(220,38,38,.42);pointer-events:none}
+  table.mx td.chip, table.mx th.chip{border:none;background:transparent;font-size:15px;color:var(--warn);font-weight:700;padding:4px 10px;white-space:nowrap}
+  table.mx td.chip input{width:58px;font:inherit;text-align:center;border:1.5px solid var(--line);border-radius:8px;padding:5px 3px}
+  table.mx td.chip input.good{border-color:var(--ok);background:var(--ok-soft)}
+  table.mx td.chip input.badIn{border-color:var(--bad);background:var(--bad-soft)}
+
+  .explain{background:var(--accent-soft);border-radius:10px;padding:14px 18px;margin:14px 0;font-size:16.5px}
+  .explain b{color:var(--accent)}
+  .practice{background:var(--warn-soft);border:1px solid #fde68a;border-radius:10px;padding:14px 18px;margin:14px 0}
+  .practice .q{font-weight:700;margin-bottom:8px}
+  .practice input{font:inherit;font-size:18px;width:110px;text-align:center;border:1.5px solid var(--line);border-radius:8px;padding:7px}
+  .fb{margin-top:10px;font-weight:700}
+  .fb.good{color:var(--ok)} .fb.badFb{color:var(--bad)}
+  .okNote{color:var(--ok);font-weight:700;margin:6px 0}
+
+  .nav{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px}
+  #progress{color:var(--muted);font-weight:600;font-size:15px}
+  .row.small button{font-size:14px;padding:6px 12px}
+
+  .resCard{background:var(--ok-soft);border:1px solid #bbf7d0;border-radius:12px;padding:18px 22px;margin:14px 0}
+  .resCard h3{margin:0 0 10px;font-size:20px}
+  table.resT{border-collapse:collapse;font-size:18px}
+  table.resT td{padding:5px 14px 5px 0}
+  table.resT td.num{text-align:right;font-weight:700}
+  .total{margin-top:12px;font-size:21px}
+  .total b{color:var(--ok)}
+  footer{color:var(--muted);font-size:13px;text-align:center;margin-top:30px}
+  #editor{overflow-x:auto}
+
+  /* ---- Mouse only: hover effects (on touch screens they stick after a tap) ---- */
+  @media (hover:hover){
+    button:hover{background:#f3f4f6}
+    button.primary:hover{background:#1d4ed8}
+    table.editT input.hdr:hover{border-color:var(--line);background:#fff}
+    table.mx th.clickable:hover{background:var(--accent-soft);color:var(--accent)}
+    table.mx td.clickableCell:hover{box-shadow:inset 0 0 0 2px var(--accent)}
+  }
+
+  /* ---- Touch screens (iPad / iPhone). Desktop with a mouse is unaffected. ---- */
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+  @media (pointer:coarse){
+    /* iOS zooms in on any text box under 16px and does not zoom back out */
+    input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea{font-size:16px}
+    button, select{min-height:44px}
+    table.mx th.clickable{padding:12px 10px}
+    .kbdTip{display:none}
+  }
+
+  /* ---- Narrow screens (phones) ---- */
+  @media screen and (max-width:640px){
+    .wrap{padding:16px 12px 48px}
+    .card{padding:16px 12px;border-radius:12px}
+    header h1{font-size:24px}
+    select{max-width:100%}
+    label.fld{flex-wrap:wrap}
+    table.editT th, table.editT td{padding:2px}
+    table.editT input.hdr{width:58px;padding:5px 2px}
+    table.editT input.valIn{width:56px}
+    table.mx{margin:8px 0}
+    table.mx th{font-size:13px;padding:4px 5px}
+    table.mx th.rh{padding-right:6px}
+    table.mx th.clickable{padding:10px 2px}
+    table.mx td.cell{width:46px;height:46px;font-size:17px}
+    table.mx td.cell .val{min-width:32px;padding:2px 3px}
+    table.mx td.chip, table.mx th.chip{padding:4px 4px}
+    table.mx th.chip{white-space:normal;font-size:12px;line-height:1.2}
+    table.mx td.chip input{width:46px}
+    .explain, .practice{padding:12px 14px}
+    .nav{gap:8px}
+    #progress{text-align:center;font-size:14px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Hungarian Method — Student Practice</h1>
+    <p class="sub">Assignment problem · IES 303 Scheduling · you solve each step yourself</p>
+  </header>
+
+  <section class="card" id="setupCard">
+    <div class="row">
+      <label class="fld">Jobs (rows)
+        <select id="selR"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+      </label>
+      <label class="fld">Machines (columns)
+        <select id="selC"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+      </label>
+      <span class="seg" id="segObj">
+        <button data-v="min" class="on">Minimize · time/cost</button>
+        <button data-v="max">Maximize · profit</button>
+      </span>
+    </div>
+    <div id="editor"></div>
+    <p class="hint">Click a name to rename a job or machine. If jobs ≠ machines, a dummy row/column is added automatically during the walkthrough.</p>
+    <div class="row">
+      <button id="btnDefault">Load default example</button>
+      <button id="btnRandom">Random values</button>
+      <button id="btnStart" class="primary">Start practice ▶</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="walkCard">
+    <div class="stepHead"><span class="badge" id="stepBadge"></span><h2 id="stepTitle"></h2></div>
+    <div id="matrixArea"></div>
+    <div id="explain" class="explain"></div>
+    <div id="practiceArea"></div>
+    <div class="nav">
+      <button id="btnBack">◀ Back</button>
+      <div id="progress"></div>
+      <button id="btnNext" class="primary">Next ▶</button>
+    </div>
+    <div class="row small">
+      <button id="btnEdit">✎ Edit problem</button>
+      <button id="btnRestart">↺ Restart</button>
+      <span class="hint">Solve the step, press Check, then Next.<span class="kbdTip"> Use ← / → arrow keys to move between solved steps.</span></span>
+    </div>
+  </section>
+
+  <footer>Hungarian method — student practice · IES 303 Operations Management · SIIT</footer>
+</div>
+
+<script id="solverScript">
+/* ---------- pure solver: builds a full step-by-step trace ---------- */
+const EPS = 1e-9;
+const isZero = v => Math.abs(v) < EPS;
+const clone = m => m.map(r => r.slice());
+
+function maxMatching(mat){           // max matching on zero cells (augmenting paths)
+  const n = mat.length;
+  const matchRow = Array(n).fill(-1), matchCol = Array(n).fill(-1);
+  function aug(r, seen){
+    for(let c=0;c<n;c++){
+      if(isZero(mat[r][c]) && !seen[c]){
+        seen[c] = true;
+        if(matchCol[c] === -1 || aug(matchCol[c], seen)){
+          matchCol[c] = r; matchRow[r] = c; return true;
+        }
+      }
+    }
+    return false;
+  }
+  let size = 0;
+  for(let r=0;r<n;r++) if(aug(r, Array(n).fill(false))) size++;
+  return {matchRow, matchCol, size};
+}
+
+function minCover(mat, matching){    // König: min lines covering all zeros
+  const n = mat.length;
+  const markedRow = Array(n).fill(false), markedCol = Array(n).fill(false);
+  for(let r=0;r<n;r++) if(matching.matchRow[r] === -1) markedRow[r] = true;
+  let changed = true;
+  while(changed){
+    changed = false;
+    for(let r=0;r<n;r++) if(markedRow[r])
+      for(let c=0;c<n;c++) if(isZero(mat[r][c]) && !markedCol[c]){ markedCol[c]=true; changed=true; }
+    for(let c=0;c<n;c++) if(markedCol[c]){
+      const r = matching.matchCol[c];
+      if(r !== -1 && !markedRow[r]){ markedRow[r]=true; changed=true; }
+    }
+  }
+  const rows=[], cols=[];
+  for(let r=0;r<n;r++) if(!markedRow[r]) rows.push(r);
+  for(let c=0;c<n;c++) if(markedCol[c]) cols.push(c);
+  return {rows, cols};
+}
+
+function coversAllZeros(mat, rowSet, colSet){
+  for(let r=0;r<mat.length;r++)
+    for(let c=0;c<mat.length;c++)
+      if(isZero(mat[r][c]) && !rowSet.has(r) && !colSet.has(c)) return false;
+  return true;
+}
+
+function buildTrace(orig, R, C, maximize){
+  const steps = [];
+  const n = Math.max(R, C);
+  let mat = clone(orig);                                  // R x C
+
+  steps.push({type:'problem', pre:null, post:clone(mat)});
+
+  let maxVal = null;
+  if(maximize){
+    maxVal = -Infinity;
+    for(const row of mat) for(const v of row) maxVal = Math.max(maxVal, v);
+    const pre = clone(mat);
+    mat = mat.map(row => row.map(v => maxVal - v));
+    steps.push({type:'convert', pre, post:clone(mat), maxVal});
+  }
+
+  if(R !== C){
+    const pre = clone(mat);
+    const padded = [];
+    for(let r=0;r<n;r++){
+      const row = [];
+      for(let c=0;c<n;c++) row.push(r < R && c < C ? mat[r][c] : 0);
+      padded.push(row);
+    }
+    mat = padded;
+    steps.push({type:'balance', pre, post:clone(mat), dummyRows:n-R, dummyCols:n-C});
+  }
+
+  { // row reduction
+    const pre = clone(mat);
+    const mins = mat.map(row => Math.min(...row));
+    mat = mat.map((row,r) => row.map(v => v - mins[r]));
+    steps.push({type:'rowred', pre, post:clone(mat), mins});
+  }
+  { // column reduction
+    const pre = clone(mat);
+    const mins = [];
+    for(let c=0;c<n;c++){ let m=Infinity; for(let r=0;r<n;r++) m=Math.min(m, mat[r][c]); mins.push(m); }
+    mat = mat.map(row => row.map((v,c) => v - mins[c]));
+    steps.push({type:'colred', pre, post:clone(mat), mins});
+  }
+
+  let iter = 0, matching = null, guard = 0;
+  while(true){
+    if(++guard > 80) break;                                // safety
+    iter++;
+    matching = maxMatching(mat);
+    const cover = minCover(mat, matching);
+    const L = cover.rows.length + cover.cols.length;
+    steps.push({type:'cover', pre:clone(mat), post:clone(mat), cover, lines:L, iter});
+    steps.push({type:'test',  pre:clone(mat), post:clone(mat), cover, lines:L, iter, optimal:L===n});
+    if(L === n) break;
+    const rs = new Set(cover.rows), cs = new Set(cover.cols);
+    let delta = Infinity;
+    for(let r=0;r<n;r++) for(let c=0;c<n;c++)
+      if(!rs.has(r) && !cs.has(c)) delta = Math.min(delta, mat[r][c]);
+    const pre = clone(mat);
+    for(let r=0;r<n;r++) for(let c=0;c<n;c++){
+      const cr = rs.has(r), cc = cs.has(c);
+      if(!cr && !cc) mat[r][c] -= delta;
+      else if(cr && cc) mat[r][c] += delta;
+    }
+    steps.push({type:'adjust', pre, post:clone(mat), delta, cover, iter});
+  }
+
+  const assign = [];
+  for(let r=0;r<n;r++) assign.push({r, c: matching.matchRow[r]});
+  steps.push({type:'assign', pre:clone(mat), post:clone(mat), assign});
+  steps.push({type:'result', pre:clone(mat), post:clone(mat), assign});
+  return {steps, n, maxVal};
+}
+</script>
+
+<script>
+/* ---------- UI ---------- */
+const $ = id => document.getElementById(id);
+const MAXN = 6;
+const state = {
+  R:4, C:4, maximize:false, mode:'practice',     // student version: always practice
+  rowNames: Array.from({length:MAXN}, (_,i)=>`Job ${i+1}`),
+  colNames: Array.from({length:MAXN}, (_,i)=>`Machine ${String.fromCharCode(65+i)}`),
+  values: Array.from({length:MAXN}, ()=>Array.from({length:MAXN}, ()=>0)),
+};
+let trace = null, idx = 0, practice = [], orig = null, finalAssign = null;
+
+const DEFAULT4 = [[90,75,75,80],[35,85,55,65],[125,95,90,105],[45,110,95,115]];
+
+function fmt(v){ return Number.isInteger(v) ? v : +v.toFixed(2); }
+function unitWord(){ return state.maximize ? 'profit' : 'time'; }
+
+/* ----- setup editor ----- */
+function loadDefault(){
+  state.R = 4; state.C = 4; $('selR').value = 4; $('selC').value = 4;
+  for(let r=0;r<4;r++) for(let c=0;c<4;c++) state.values[r][c] = DEFAULT4[r][c];
+  renderEditor();
+}
+function randomFill(){
+  for(let r=0;r<state.R;r++) for(let c=0;c<state.C;c++)
+    state.values[r][c] = 5 * (1 + Math.floor(Math.random()*19));
+  renderEditor();
+}
+function renderEditor(){
+  const {R,C} = state;
+  let h = '<table class="editT"><tr><th></th>';
+  for(let c=0;c<C;c++) h += `<th><input class="hdr" data-cn="${c}" value="${esc(state.colNames[c])}"></th>`;
+  h += '</tr>';
+  for(let r=0;r<R;r++){
+    h += `<tr><th><input class="hdr" data-rn="${r}" value="${esc(state.rowNames[r])}"></th>`;
+    for(let c=0;c<C;c++)
+      h += `<td><input type="number" class="valIn" data-r="${r}" data-c="${c}" value="${state.values[r][c]}"></td>`;
+    h += '</tr>';
+  }
+  h += '</table>';
+  $('editor').innerHTML = h;
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+$('editor').addEventListener('input', e => {
+  const t = e.target;
+  if(t.dataset.rn !== undefined) state.rowNames[+t.dataset.rn] = t.value;
+  else if(t.dataset.cn !== undefined) state.colNames[+t.dataset.cn] = t.value;
+  else if(t.dataset.r !== undefined) state.values[+t.dataset.r][+t.dataset.c] = parseFloat(t.value) || 0;
+});
+$('selR').addEventListener('change', e => { state.R = +e.target.value; fillNew(); renderEditor(); });
+$('selC').addEventListener('change', e => { state.C = +e.target.value; fillNew(); renderEditor(); });
+function fillNew(){ // give newly exposed cells a value so the table is never blank
+  for(let r=0;r<state.R;r++) for(let c=0;c<state.C;c++)
+    if(!state.values[r][c]) state.values[r][c] = 5 * (1 + Math.floor(Math.random()*19));
+}
+function segWire(id, fn){
+  $(id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    [...$(id).children].forEach(x => x.classList.toggle('on', x === b));
+    fn(b.dataset.v);
+  });
+}
+segWire('segObj', v => { state.maximize = v === 'max'; });
+$('btnDefault').addEventListener('click', loadDefault);
+$('btnRandom').addEventListener('click', randomFill);
+$('btnStart').addEventListener('click', startWalk);
+$('btnEdit').addEventListener('click', () => { $('walkCard').classList.add('hidden'); $('setupCard').classList.remove('hidden'); });
+$('btnRestart').addEventListener('click', () => { startWalk(); });
+$('btnBack').addEventListener('click', () => { if(idx>0){ idx--; renderStep(); } });
+$('btnNext').addEventListener('click', () => { if(canNext()){ idx++; renderStep(); } });
+document.addEventListener('keydown', e => {
+  if($('walkCard').classList.contains('hidden')) return;
+  if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  if(e.key === 'ArrowRight' && canNext() && idx < trace.steps.length-1){ idx++; renderStep(); }
+  if(e.key === 'ArrowLeft' && idx > 0){ idx--; renderStep(); }
+});
+
+/* ----- walkthrough ----- */
+function startWalk(){
+  orig = [];
+  for(let r=0;r<state.R;r++){
+    const row = [];
+    for(let c=0;c<state.C;c++) row.push(state.values[r][c]);
+    orig.push(row);
+  }
+  trace = buildTrace(orig, state.R, state.C, state.maximize);
+  practice = trace.steps.map(() => ({answered:false, userLines:{rows:new Set(), cols:new Set()}, userAssign:new Set(), choice:null}));
+  finalAssign = null;
+  idx = 0;
+  $('setupCard').classList.add('hidden');
+  $('walkCard').classList.remove('hidden');
+  renderStep();
+}
+
+function hasQuestion(st){
+  return ['convert','rowred','colred','cover','test','adjust','assign'].includes(st.type);
+}
+function isAnswered(i){
+  return state.mode === 'guided' || !hasQuestion(trace.steps[i]) || practice[i].answered;
+}
+function canNext(){ return idx < trace.steps.length-1 && isAnswered(idx); }
+
+function rowLabel(r){ return r < state.R ? state.rowNames[r] : 'Dummy'; }
+function colLabel(c){ return c < state.C ? state.colNames[c] : 'Dummy'; }
+
+const TITLES = {
+  problem:'The assignment problem', convert:'Convert profit → opportunity loss',
+  balance:'Balance the table (dummy)', rowred:'Row reduction', colred:'Column reduction',
+  cover:'Cover the zeros with lines', test:'Optimality test', adjust:'Create new zeros',
+  assign:'Make the assignment', result:'Result'
+};
+function badgeFor(st){
+  switch(st.type){
+    case 'problem': return 'Problem';
+    case 'convert': case 'balance': return 'Setup';
+    case 'rowred': return 'Step 1';
+    case 'colred': return 'Step 2';
+    case 'cover': return `Step 3 · Round ${st.iter}`;
+    case 'test': return `Round ${st.iter}`;
+    case 'adjust': return `Step 4 · Round ${st.iter}`;
+    case 'assign': return 'Step 5';
+    case 'result': return 'Done';
+  }
+}
+
+function diffCells(pre, post){
+  const s = new Set();
+  if(!pre) return s;
+  for(let r=0;r<post.length;r++) for(let c=0;c<post[r].length;c++)
+    if(r < pre.length && c < pre[r].length && Math.abs(pre[r][c]-post[r][c]) > EPS) s.add(r+','+c);
+  return s;
+}
+
+function matrixHTML(o){
+  // o: mat, zeros, lines{rows[],cols[]}, changed(Set), signDiff(pre), assigned([{r,c}]), selected(Set),
+  //    chips{kind:'row'|'col', values|input:true}, headClick, cellClickZeros
+  const m = o.mat, n = m.length, C0 = m[0].length;
+  const lr = new Set(o.lines ? o.lines.rows : []), lc = new Set(o.lines ? o.lines.cols : []);
+  const asg = new Set((o.assigned||[]).map(a => a.r+','+a.c));
+  let h = '<table class="mx"><tr><th></th>';
+  for(let c=0;c<C0;c++){
+    const cls = ['ch']; if(lc.has(c)) cls.push('lineOn'); if(o.headClick) cls.push('clickable');
+    h += `<th class="${cls.join(' ')}" data-hc="${c}">${esc(colLabel(c))}</th>`;
+  }
+  if(o.chips && o.chips.kind === 'row') h += '<th class="chip">row min</th>';
+  h += '</tr>';
+  for(let r=0;r<n;r++){
+    const rcls = ['rh']; if(lr.has(r)) rcls.push('lineOn'); if(o.headClick) rcls.push('clickable');
+    h += `<tr><th class="${rcls.join(' ')}" data-hr="${r}">${esc(rowLabel(r))}</th>`;
+    for(let c=0;c<C0;c++){
+      const v = m[r][c], key = r+','+c;
+      const cls = ['cell'];
+      if(o.zeros && isZero(v)) cls.push('zero');
+      if(lr.has(r)) cls.push('covR');
+      if(lc.has(c)) cls.push('covC');
+      if(o.changed && o.changed.has(key)){
+        if(o.signDiff){
+          cls.push(o.signDiff[r][c] < v - EPS ? 'up' : 'down');
+        } else cls.push('chg');
+      }
+      if((r >= state.R || c >= state.C) && n > Math.min(state.R, state.C)) {
+        if(r >= state.R || c >= state.C) cls.push('dummy');
+      }
+      if(asg.has(key)) cls.push('asg');
+      if(o.selected && o.selected.has(key)) cls.push('sel');
+      if(o.cellClickZeros && isZero(v)) cls.push('clickableCell');
+      h += `<td class="${cls.join(' ')}" data-r="${r}" data-c="${c}"><span class="val">${fmt(v)}</span></td>`;
+    }
+    if(o.chips && o.chips.kind === 'row'){
+      h += o.chips.input
+        ? `<td class="chip"><input type="number" data-min="${r}" placeholder="?"></td>`
+        : `<td class="chip">− ${fmt(o.chips.values[r])}</td>`;
+    }
+    h += '</tr>';
+  }
+  if(o.chips && o.chips.kind === 'col'){
+    h += '<tr><th class="chip">col min</th>';
+    for(let c=0;c<C0;c++){
+      h += o.chips.input
+        ? `<td class="chip"><input type="number" data-min="${c}" placeholder="?"></td>`
+        : `<td class="chip">− ${fmt(o.chips.values[c])}</td>`;
+    }
+    h += '</tr>';
+  }
+  h += '</table>';
+  return h;
+}
+
+function explainFor(st){
+  const n = trace.n, u = unitWord();
+  switch(st.type){
+    case 'problem':
+      return `Each job must be assigned to exactly <b>one</b> machine, and each machine takes at most one job. We want the assignment with the ${state.maximize ? '<b>largest total profit</b>' : '<b>smallest total ' + u + '</b>'}. Checking every combination means ${n}! possibilities — the Hungarian method finds the optimum systematically.`;
+    case 'convert':
+      return `The Hungarian method always <b>minimizes</b>. To maximize profit, convert the table to <b>opportunity losses</b>: new value = ${fmt(st.maxVal)} − old value, where <b>${fmt(st.maxVal)}</b> is the largest profit in the table. A 0 now marks the best possible cell — and minimizing total loss is exactly the same as maximizing total profit.`;
+    case 'balance': {
+      const what = st.dummyRows > 0 ? `${st.dummyRows} dummy row(s) (dummy job)` : `${st.dummyCols} dummy column(s) (dummy machine)`;
+      const mean = st.dummyRows > 0 ? 'a machine assigned to the dummy job simply stays idle' : 'a job assigned to the dummy machine is left unassigned';
+      return `The method needs a <b>square</b> table. We have ${state.R} job(s) and ${state.C} machine(s), so we add ${what} filled with <b>0</b> — ${mean}, at no cost.`;
+    }
+    case 'rowred':
+      return `Subtract the <b>smallest value of each row</b> from every entry in that row (shown at the right). Differences inside a row are unchanged, so the optimal assignment is unchanged — but every row now has at least one <b>0</b>: that row's cheapest opportunity.`;
+    case 'colred':
+      return `Now subtract the <b>smallest value of each column</b> (shown below). Every row <i>and</i> every column now contains a zero. If we can pick ${n} zeros in all-different rows and columns, that assignment is optimal.`;
+    case 'cover':
+      return `Cover <b>all zeros</b> with as few horizontal and vertical lines as possible. Here the minimum is <b>${st.lines} line(s)</b>. (The fewest lines needed always equals the largest number of zeros you could assign without conflict.)`;
+    case 'test':
+      return st.optimal
+        ? `<b>${st.lines} lines = n = ${n}.</b> The zeros are spread widely enough — a complete assignment using only zeros exists. Go and pick it!`
+        : `<b>Only ${st.lines} lines &lt; n = ${n}.</b> The zeros are too concentrated — we cannot yet assign every job to a zero. We must create new zeros (Step 4).`;
+    case 'adjust':
+      return `Smallest <b>uncovered</b> value: <b>δ = ${fmt(st.delta)}</b>. Subtract δ from every uncovered cell (green) and add δ at every intersection of two lines (orange); cells covered once are unchanged. This creates at least one new zero without disturbing the comparison. Then return to Step 3 and cover again.`;
+    case 'assign': {
+      const dums = st.assign.filter(a => a.r >= state.R || a.c >= state.C);
+      return `Choose ${n} zeros so that every row and every column is used <b>exactly once</b> — the circled cells. Hand method: first satisfy rows/columns containing a <b>single</b> zero, cross out their row and column, and repeat.` +
+        (dums.length ? ` Assignments involving a <i>dummy</i> mean no real work is scheduled there.` : '');
+    }
+    case 'result': return '';
+  }
+}
+
+function promptFor(st){
+  switch(st.type){
+    case 'convert': return 'What is the <b>largest value</b> in the table? (We will subtract every entry from it.)';
+    case 'rowred': return 'Enter the <b>minimum of each row</b> in the boxes on the right, then press Check.';
+    case 'colred': return 'Enter the <b>minimum of each column</b> in the boxes below, then press Check.';
+    case 'cover': return 'Click <b>row / column names</b> to draw lines. Cover <b>every zero</b> with the <b>fewest</b> lines, then press Check.';
+    case 'test': return `Count the lines and compare with n = ${trace.n}. Is the solution <b>optimal</b>?`;
+    case 'adjust': return 'Find the <b>smallest uncovered value δ</b> (not crossed by any line).';
+    case 'assign': return 'Click zero cells to build the assignment — exactly <b>one per row and one per column</b> — then press Check.';
+  }
+  return '';
+}
+
+function renderStep(){
+  const st = trace.steps[idx];
+  const ps = practice[idx];
+  const answered = isAnswered(idx);
+  $('stepBadge').textContent = badgeFor(st);
+  $('stepTitle').textContent = TITLES[st.type];
+  $('progress').textContent = `Step ${idx+1} / ${trace.steps.length}`;
+
+  const o = {mat: answered ? st.post : st.pre, zeros:true};
+  switch(st.type){
+    case 'problem': o.zeros = false; break;
+    case 'convert':
+      if(answered) o.changed = diffCells(st.pre, st.post);
+      else o.zeros = false;
+      break;
+    case 'balance': break;
+    case 'rowred':
+      if(answered){ o.changed = diffCells(st.pre, st.post); o.chips = {kind:'row', values:st.mins}; }
+      else o.chips = {kind:'row', input:true};
+      break;
+    case 'colred':
+      if(answered){ o.changed = diffCells(st.pre, st.post); o.chips = {kind:'col', values:st.mins}; }
+      else o.chips = {kind:'col', input:true};
+      break;
+    case 'cover':
+      if(answered) o.lines = st.cover;
+      else { o.lines = {rows:[...ps.userLines.rows], cols:[...ps.userLines.cols]}; o.headClick = true; }
+      break;
+    case 'test': o.lines = st.cover; break;
+    case 'adjust':
+      o.lines = st.cover;
+      if(answered){ o.changed = diffCells(st.pre, st.post); o.signDiff = st.pre; }
+      break;
+    case 'assign':
+      if(answered) o.assigned = finalAssign || st.assign;
+      else { o.selected = ps.userAssign; o.cellClickZeros = true; }
+      break;
+    case 'result': o.assigned = finalAssign || st.assign; break;
+  }
+  $('matrixArea').innerHTML = matrixHTML(o);
+
+  // explanation / prompt
+  if(st.type === 'result'){
+    $('explain').classList.add('hidden');
+    $('explain').innerHTML = '';
+  } else {
+    $('explain').classList.remove('hidden');
+    $('explain').innerHTML = answered ? explainFor(st) : promptFor(st);
+  }
+
+  renderPracticeArea(st, ps, answered);
+  if(st.type === 'result') renderResult(st);
+
+  $('btnBack').disabled = idx === 0;
+  $('btnNext').disabled = !canNext();
+  wireMatrixHandlers(st, ps, answered);
+}
+
+function renderPracticeArea(st, ps, answered){
+  const area = $('practiceArea');
+  if(state.mode === 'guided' || !hasQuestion(st)){ area.innerHTML = ''; return; }
+  if(answered){
+    area.innerHTML = `<div class="okNote">✓ ${ps.revealed ? 'Answer shown.' : 'Correct!'}${st.type==='cover' && ps.coverNote ? ' Your covering also works — we continue with an equivalent one.' : ''}</div>`;
+    return;
+  }
+  let inner = '';
+  if(st.type === 'convert' || st.type === 'adjust')
+    inner = `<input type="number" id="pIn" placeholder="?"> `;
+  if(st.type === 'test')
+    inner = `<button id="pYes">Yes — optimal</button> <button id="pNo">No — not yet</button>`;
+  const needCheck = ['convert','rowred','colred','cover','adjust','assign'].includes(st.type);
+  area.innerHTML = `<div class="practice"><div class="q">Your turn</div>${inner}
+    ${needCheck ? '<button class="primary" id="pCheck">Check</button>' : ''}
+    <button id="pReveal">Show answer</button><div class="fb" id="pFb"></div></div>`;
+  if(needCheck) $('pCheck').addEventListener('click', () => checkAnswer(st, ps));
+  $('pReveal').addEventListener('click', () => { ps.answered = true; ps.revealed = true; renderStep(); });
+  if(st.type === 'test'){
+    $('pYes').addEventListener('click', () => testChoice(st, ps, true));
+    $('pNo').addEventListener('click', () => testChoice(st, ps, false));
+  }
+}
+
+function feedback(msg, good){
+  const fb = $('pFb');
+  if(fb){ fb.textContent = msg; fb.className = 'fb ' + (good ? 'good' : 'badFb'); }
+}
+function near(a,b){ return Math.abs(a-b) < 1e-6; }
+
+function testChoice(st, ps, yes){
+  if(yes === st.optimal){ ps.answered = true; renderStep(); }
+  else feedback(yes ? `Not yet — only ${st.lines} lines but n = ${trace.n}.` : `It is optimal: ${st.lines} lines = n = ${trace.n}.`, false);
+}
+
+function checkAnswer(st, ps){
+  if(st.type === 'convert'){
+    const v = parseFloat($('pIn').value);
+    if(near(v, st.maxVal)){ ps.answered = true; renderStep(); }
+    else feedback('Not the largest value in the table — look again.', false);
+  }
+  else if(st.type === 'rowred' || st.type === 'colred'){
+    const ins = [...$('matrixArea').querySelectorAll('input[data-min]')];
+    let allGood = true;
+    ins.forEach(inp => {
+      const i = +inp.dataset.min, v = parseFloat(inp.value);
+      const good = near(v, st.mins[i]);
+      inp.classList.toggle('good', good);
+      inp.classList.toggle('badIn', !good);
+      if(!good) allGood = false;
+    });
+    if(allGood){ ps.answered = true; renderStep(); }
+    else feedback('The red boxes are wrong — find the smallest value in that ' + (st.type==='rowred'?'row':'column') + '.', false);
+  }
+  else if(st.type === 'cover'){
+    const rs = ps.userLines.rows, cs = ps.userLines.cols;
+    const count = rs.size + cs.size;
+    if(!coversAllZeros(st.pre, rs, cs)){ feedback('Some zeros are still uncovered.', false); return; }
+    if(count > st.lines){ feedback(`All zeros covered, but you used ${count} lines — it can be done with ${st.lines}.`, false); return; }
+    const same = st.cover.rows.every(r=>rs.has(r)) && st.cover.cols.every(c=>cs.has(c)) && count === st.lines;
+    ps.coverNote = !same;
+    ps.answered = true; renderStep();
+  }
+  else if(st.type === 'adjust'){
+    const v = parseFloat($('pIn').value);
+    if(near(v, st.delta)){ ps.answered = true; renderStep(); }
+    else feedback('Look only at cells not crossed by any line, and take the smallest.', false);
+  }
+  else if(st.type === 'assign'){
+    const n = trace.n, sel = [...ps.userAssign].map(k => k.split(',').map(Number));
+    if(sel.length !== n){ feedback(`Select exactly ${n} zeros (one per row and per column). Currently: ${sel.length}.`, false); return; }
+    const rows = new Set(sel.map(s=>s[0])), cols = new Set(sel.map(s=>s[1]));
+    if(rows.size !== n || cols.size !== n){ feedback('Each row and each column must be used exactly once.', false); return; }
+    if(!sel.every(([r,c]) => isZero(st.pre[r][c]))){ feedback('Only cells with value 0 may be chosen.', false); return; }
+    finalAssign = sel.map(([r,c]) => ({r,c}));
+    ps.answered = true; renderStep();
+  }
+}
+
+function wireMatrixHandlers(st, ps, answered){
+  if(answered || state.mode === 'guided') return;
+  if(st.type === 'cover'){
+    $('matrixArea').querySelectorAll('th.clickable').forEach(th => {
+      th.addEventListener('click', () => {
+        if(th.dataset.hr !== undefined){
+          const r = +th.dataset.hr;
+          ps.userLines.rows.has(r) ? ps.userLines.rows.delete(r) : ps.userLines.rows.add(r);
+        } else {
+          const c = +th.dataset.hc;
+          ps.userLines.cols.has(c) ? ps.userLines.cols.delete(c) : ps.userLines.cols.add(c);
+        }
+        renderStep();
+      });
+    });
+  }
+  if(st.type === 'assign'){
+    $('matrixArea').querySelectorAll('td.clickableCell').forEach(td => {
+      td.addEventListener('click', () => {
+        const k = td.dataset.r + ',' + td.dataset.c;
+        ps.userAssign.has(k) ? ps.userAssign.delete(k) : ps.userAssign.add(k);
+        renderStep();
+      });
+    });
+  }
+}
+
+function renderResult(st){
+  const asg = finalAssign || st.assign;
+  let rows = '', total = 0;
+  const sorted = [...asg].sort((a,b) => a.r - b.r);
+  for(const {r,c} of sorted){
+    if(r < state.R && c < state.C){
+      const v = orig[r][c]; total += v;
+      rows += `<tr><td>${esc(state.rowNames[r])}</td><td>→</td><td>${esc(state.colNames[c])}</td><td class="num">${fmt(v)}</td></tr>`;
+    } else if(r < state.R){
+      rows += `<tr><td>${esc(state.rowNames[r])}</td><td>→</td><td><i>not assigned (dummy machine)</i></td><td class="num">–</td></tr>`;
+    } else {
+      rows += `<tr><td><i>Dummy job</i></td><td>→</td><td>${esc(state.colNames[c])} <i>(machine idle)</i></td><td class="num">–</td></tr>`;
+    }
+  }
+  const label = state.maximize ? 'Total profit' : 'Total ' + unitWord();
+  $('practiceArea').innerHTML = `<div class="resCard"><h3>Optimal assignment</h3>
+    <table class="resT">${rows}</table>
+    <div class="total">${label} = <b>${fmt(total)}</b></div>
+    <p class="hint">Any complete assignment that uses only zeros of the final table gives this same optimal total.</p></div>`;
+}
+
+/* ----- init ----- */
+loadDefault();
+</script>
+</body>
+</html>

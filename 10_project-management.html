@@ -1,0 +1,2343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Management — IES 303</title>
+<!--
+  Project management teaching tool — IES 303 Operations Management (SIIT), Lecture 10.
+  Standalone page: open directly in any browser, no server needed.
+
+  Two modules over one shared activity table, each in Guided and Practice mode:
+    Tab 1  Network diagram (AOA + AON)     deck slides 4-16
+    Tab 2  Critical path                   deck slides 17-28
+
+  Slide numbers refer to "10 Project Management.pptx" (44 slides).
+  Units: DAYS throughout (the deck mixes days and weeks; the tool standardises).
+
+  Add ?test (or #test) to the URL to run the acceptance suite in the page.
+
+  Probabilistic time estimates (PERT) and crashing were built and then removed
+  at the instructor's request; the full four-module version is kept alongside as
+  10_project-management_ARCHIVE_with-PERT-and-crashing.html.
+
+  Correction made against the deck (verified by reading the .pptx directly):
+    - slide 19's ES definition says preceding activities "start at" their
+      earliest finish time; the tool says "finishes as early as possible"
+    - slide 28 is correct and DOES have an LF column (slides 26/27 do not)
+-->
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --ok:#16a34a;     --ok-soft:#f0fdf4;
+    --warn:#d97706;   --warn-soft:#fffbeb;
+    --bad:#dc2626;    --bad-soft:#fef2f2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);background:#fafafa;font-size:16px;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px}
+  header h1{margin:0;font-size:29px;font-weight:700}
+  header .sub{margin:4px 0 20px;color:var(--muted)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 10px;font-size:19px}
+  .hint{color:var(--muted);font-size:13.5px}
+  .hidden{display:none !important}
+  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:10px 0}
+  label.fld{display:flex;align-items:center;gap:7px;font-weight:600;font-size:15px}
+  select,input[type=text],input[type=number]{font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  input[type=number]{width:84px;text-align:center}
+  button{font:inherit;font-weight:600;padding:8px 15px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:none;border-radius:0;padding:8px 14px;background:#fff;font-weight:600}
+  .seg button.on{background:var(--accent);color:#fff}
+
+  /* --- module tab bar --- */
+  .tabbar{display:flex;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px;background:#fff}
+  .tabbar button{flex:1;border:none;border-radius:0;padding:13px 10px;background:#fff;font-weight:700;font-size:15.5px;border-right:1px solid var(--line);line-height:1.25}
+  .tabbar button:last-child{border-right:none}
+  .tabbar button .tn{display:block;font-size:12px;font-weight:600;color:var(--muted)}
+  .tabbar button.on{background:var(--accent);color:#fff}
+  .tabbar button.on .tn{color:#dbeafe}
+
+  /* --- activity editor --- */
+  table.editT{border-collapse:collapse;margin:10px 0}
+  table.editT th{background:#f8fafc;color:var(--muted);font-size:12.5px;font-weight:600;padding:6px 9px;border:1px solid var(--line);white-space:nowrap}
+  table.editT th.grp{background:var(--accent-soft);color:var(--accent)}
+  table.editT td{border:1px solid var(--line);padding:3px 4px;text-align:center}
+  table.editT input{border:1px solid transparent;background:transparent;border-radius:6px;padding:6px 4px;text-align:center;font:inherit;width:74px}
+  table.editT input.id{width:78px;font-weight:700}
+  table.editT input.preds{width:118px}
+  table.editT input:focus{border-color:var(--accent);background:#fff;outline:none}
+  table.editT input:disabled{color:var(--muted);background:#f8fafc}
+  table.editT td.calc{color:var(--muted);font-variant-numeric:tabular-nums;font-size:14.5px}
+  table.editT td.sw span{display:block;width:12px;height:12px;border-radius:4px;margin:0 auto}
+  table.editT button.del{padding:3px 9px;font-size:13px;color:var(--bad);border-color:transparent;background:transparent}
+
+  /* --- validation list --- */
+  ul.errList{list-style:none;margin:8px 0 0;padding:0}
+  ul.errList li{padding:7px 12px;border-radius:8px;margin-bottom:5px;font-size:14.5px}
+  ul.errList li.err{background:var(--bad-soft);color:var(--bad);border:1px solid #fecaca}
+  ul.errList li.ok{background:var(--ok-soft);color:var(--ok);border:1px solid #bbf7d0}
+  ul.errList li.warn{background:var(--warn-soft);color:var(--warn);border:1px solid #fde68a}
+
+  .presetNote{background:var(--accent-soft);border-radius:10px;padding:10px 15px;margin:8px 0;font-size:14.5px}
+  .presetNote b{color:var(--accent)}
+
+  /* --- result tables --- */
+  table.dataT{border-collapse:collapse;font-size:15.5px;margin:10px 0}
+  table.dataT th{background:#f8fafc;color:var(--muted);font-size:13px;padding:7px 13px;border:1px solid var(--line);white-space:nowrap}
+  table.dataT td{padding:6px 13px;border:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+  table.dataT td.jb{text-align:left;font-weight:700;white-space:nowrap}
+  table.dataT tr.crit td{background:var(--ok-soft)}
+  table.dataT tr.crit td.jb{color:var(--ok)}
+  table.dataT tr.now td{background:#fef9c3}
+  table.dataT td input{width:72px;font:inherit;font-size:15px;text-align:center;border:1.5px solid var(--line);border-radius:7px;padding:5px 3px}
+  table.dataT td input:focus{border-color:var(--accent);outline:none}
+  table.dataT td input.good{border-color:var(--ok);background:var(--ok-soft)}
+  table.dataT td input.badIn{border-color:var(--bad);background:var(--bad-soft)}
+  table.dataT td input:disabled{background:#f8fafc;color:var(--muted)}
+  table.dataT td.locked{background:#f8fafc;color:#cbd5e1}
+
+  /* --- panels --- */
+  .explain{background:var(--accent-soft);border-radius:10px;padding:13px 18px;margin:12px 0;font-size:16px}
+  .explain b{color:var(--accent)}
+  .explain code{font-family:Consolas,"Courier New",monospace;font-size:15.5px;background:#fff;padding:1px 5px;border-radius:5px}
+  .practice{background:var(--warn-soft);border:1px solid #fde68a;border-radius:10px;padding:14px 18px;margin:12px 0}
+  .practice .q{font-weight:700;margin-bottom:8px}
+  .fb{margin-top:10px;font-weight:700}
+  .fb.good{color:var(--ok)} .fb.badFb{color:var(--bad)}
+  .okNote{color:var(--ok);font-weight:700;margin:10px 0;background:var(--ok-soft);border:1px solid #bbf7d0;
+          border-radius:10px;padding:11px 16px;font-size:16.5px}
+  .okNote.neutral{color:var(--muted);background:#f8fafc;border-color:var(--line)}
+  .defs{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin:10px 0}
+  .defs div{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:14.5px}
+  .defs b{color:var(--accent);font-size:16px}
+  .cols2{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+
+  /* --- network canvas --- */
+  .canvasWrap{border:1px solid var(--line);border-radius:12px;background:#fff;overflow:auto;padding:6px;min-height:300px}
+  .canvasWrap svg{display:block}
+  .canvasWrap.build{min-height:460px;background:
+     linear-gradient(90deg,#f8fafc 1px,transparent 1px) 0 0/28px 28px,
+     linear-gradient(#f8fafc 1px,transparent 1px) 0 0/28px 28px,#fff}
+  .canvasWrap svg .nodeHit{cursor:pointer}
+  .canvasWrap svg .arcHit{cursor:pointer;stroke:transparent;stroke-width:14;fill:none}
+  .canvasWrap svg .drag{cursor:grab}
+
+  /* --- canvas with a reference table beside it --- */
+  .netLayout{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+  .netLayout > .canvasWrap{flex:1 1 440px;min-width:0}
+  .netRef{flex:0 0 auto;position:sticky;top:10px}
+  .netRef table.dataT{margin:0;font-size:14px}
+  .netRef table.dataT th{padding:5px 9px;font-size:12px}
+  .netRef table.dataT td{padding:4px 9px}
+  .netRef td.jb{font-size:14px}
+  .netRef .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  .netRef td.tick{color:var(--ok);font-weight:800;text-align:center}
+  .netRef .cap{font-size:12px;color:var(--muted);font-weight:600;margin:0 0 4px 2px}
+
+  /* --- palette --- */
+  .palette{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+  .chip{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;
+        border:2px solid var(--line);background:#fff;font-weight:700;cursor:pointer;font-size:15.5px}
+  .chip .sw{width:11px;height:11px;border-radius:3px}
+  .chip.armed{border-color:var(--accent);background:var(--accent-soft);transform:scale(1.06)}
+  .chip.placed{opacity:.35;cursor:default}
+  .chip.dummy{border-style:dashed;border-color:#ea580c;color:#ea580c}
+  .chip.dummy.armed{background:#fff7ed}
+  .legendRow{display:flex;gap:18px;flex-wrap:wrap;font-size:13.5px;color:var(--muted);margin-top:6px;align-items:center}
+  .legendRow i{width:14px;height:12px;border-radius:3px;display:inline-block;font-style:normal;vertical-align:-1px;margin-right:5px}
+
+  /* --- canvas on touch screens: a finger on a node drags it, and a long press
+         does not start a text selection or the iOS callout --- */
+  .canvasWrap svg{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  .canvasWrap svg .drag{touch-action:none}
+
+  /* --- mouse only: hover effects (on touch screens they stick after a tap) --- */
+  @media (hover:hover){
+    button:hover{background:#f3f4f6}
+    button.primary:hover{background:#1d4ed8}
+    table.editT input:hover{border-color:var(--line);background:#fff}
+    table.editT button.del:hover{background:var(--bad-soft);border-color:#fecaca}
+    .chip:hover{border-color:var(--accent)}
+    .chip.placed:hover{border-color:var(--line)}
+  }
+
+  /* --- touch screens (iPad / iPhone); desktop with a mouse is unaffected --- */
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+  @media (pointer:coarse){
+    /* iOS zooms in on any text box under 16px and does not zoom back out */
+    input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea{font-size:16px}
+    button, select, .chip{min-height:44px}
+    table.editT button.del{min-height:40px;min-width:40px}
+    .canvasWrap svg .arcHit{stroke-width:26}      /* arrows are thin: widen the tap zone */
+  }
+
+  /* --- tablet portrait and phones: wide tables scroll inside their own box --- */
+  @media screen and (max-width:820px){
+    table.dataT, table.editT{display:block;max-width:100%;overflow-x:auto}
+    .cols2 > *{min-width:0;max-width:100%}
+    /* too narrow for the reference table beside the canvas: put it above, not far below */
+    .netRef{order:-1;position:static}
+    .netLayout > .canvasWrap{flex-basis:100%}
+  }
+
+  /* --- phones --- */
+  @media screen and (max-width:640px){
+    .wrap{padding:16px 12px 48px}
+    .card{padding:16px 12px;border-radius:12px}
+    header h1{font-size:24px}
+    select{max-width:100%}
+    label.fld{flex-wrap:wrap;max-width:100%}
+    label.fld select{min-width:0}
+    .tabbar button{padding:10px 6px;font-size:14.5px}
+    table.dataT th, table.dataT td{padding:6px 8px}
+    table.dataT th{white-space:normal;line-height:1.25}
+    table.dataT td input{width:60px}
+    table.editT input{width:56px}
+    table.editT input.id{width:60px}
+    table.editT input.preds{width:92px}
+    .explain, .practice, .okNote{padding:12px 14px}
+  }
+
+  /* --- print --- */
+  @media print{
+    body{background:#fff}
+    .wrap{max-width:none;padding:0}
+    .noprint{display:none !important}
+    .card{box-shadow:none;border-color:#ccc;break-inside:avoid;page-break-inside:avoid}
+    .tabbar{display:none}
+    header h1{font-size:22px}
+    /* the student's completed table is the point of printing, so make the
+       editable fields read as plain values rather than empty-looking boxes */
+    table.editT input{border-color:transparent;background:transparent;color:var(--ink);-webkit-print-color-adjust:exact}
+    table.editT input:disabled{color:var(--ink)}
+    table.editT button.del{display:none}
+    table.editT th, table.editT td{border-color:#bbb}
+    ul.errList li{border-color:#bbb}
+  }
+
+  /* --- test report --- */
+  #testOut{font-family:Consolas,"Courier New",monospace;font-size:13.5px;white-space:pre-wrap}
+  #testOut .p{color:var(--ok)}
+  #testOut .f{color:var(--bad);font-weight:700}
+  #testOut h3{font-family:"Segoe UI",sans-serif;margin:16px 0 6px;font-size:16px}
+  .tally{font-size:18px;font-weight:800;padding:10px 16px;border-radius:10px;margin:12px 0}
+  .tally.ok{background:var(--ok-soft);color:var(--ok);border:1px solid #bbf7d0}
+  .tally.bad{background:var(--bad-soft);color:var(--bad);border:1px solid #fecaca}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Project Management</h1>
+    <p class="sub">Network diagrams · Critical path · IES 303 Lecture 10</p>
+  </header>
+  <div id="app">
+    <nav class="tabbar noprint" id="tabbar"></nav>
+
+    <section class="card" id="setupCard">
+      <h2>Project data</h2>
+      <div class="row noprint">
+        <label class="fld">Example
+          <select id="preset"></select>
+        </label>
+        <span class="seg" id="segMode">
+          <button data-v="guided" class="on">Guided — tool explains</button>
+          <button data-v="practice">Practice — you answer first</button>
+        </span>
+        <button id="btnPrint">🖨 Print</button>
+      </div>
+      <div id="presetNote" class="noprint"></div>
+      <div id="editor"></div>
+      <div class="row noprint">
+        <button id="btnAdd">+ Add activity</button>
+        <label class="fld">Random
+          <select id="selDiff"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select>
+        </label>
+        <button id="btnRandom">Generate problem</button>
+        <span class="hint">All times are in <b>days</b>. Predecessors: comma-separated activity names, blank if none.</span>
+      </div>
+      <div id="validation"></div>
+    </section>
+
+    <section class="card" id="tabCard">
+      <div id="tabBody"></div>
+    </section>
+  </div>
+
+  <section class="card hidden" id="testCard" style="display:none">
+    <h2>Acceptance tests</h2>
+    <div id="testOut"></div>
+  </section>
+</div>
+
+<script id="solverScript">
+/* =====================================================================
+   PURE ALGORITHMS — no DOM access. Extracted and unit-tested in Node.
+   ===================================================================== */
+
+var EPS = 1e-9;
+function near(a, b, tol){ return Math.abs(a - b) <= (tol == null ? 1e-9 : tol); }
+
+/* ---------------------------------------------------------------
+   Activity record:
+     { id, preds:[], dur,
+       to, tm, tp, te, variance,     // tab 3 (te/variance may be given directly)
+       crashTime,                    // shortest achievable duration
+       crashCost }                   // number = flat rate per period,
+                                     // array  = cost of 1st, 2nd, ... period
+                                     // null   = cannot be crashed
+   --------------------------------------------------------------- */
+
+/* Ids that actually exist in this activity set. Predecessor references to
+   anything else are ignored here and reported by validateActs(). */
+function knownIds(acts){
+  var s = {};
+  for(var i = 0; i < acts.length; i++) s[acts[i].id] = true;
+  return s;
+}
+function realPreds(act, known){
+  var ps = act.preds || [], out = [];
+  for(var i = 0; i < ps.length; i++) if(known[ps[i]]) out.push(ps[i]);
+  return out;
+}
+
+/* { id: [ids of immediate successors] } */
+function successors(acts){
+  var known = knownIds(acts), out = {}, i, j, ps;
+  for(i = 0; i < acts.length; i++) out[acts[i].id] = [];
+  for(i = 0; i < acts.length; i++){
+    ps = realPreds(acts[i], known);
+    for(j = 0; j < ps.length; j++) out[ps[j]].push(acts[i].id);
+  }
+  return out;
+}
+
+/* Topological order, or null if the precedence graph has a cycle. */
+function topoOrder(acts){
+  var known = knownIds(acts), succ = successors(acts), indeg = {}, queue = [], out = [], i, s;
+  for(i = 0; i < acts.length; i++){
+    indeg[acts[i].id] = realPreds(acts[i], known).length;
+    if(indeg[acts[i].id] === 0) queue.push(acts[i].id);
+  }
+  while(queue.length){
+    var x = queue.shift();
+    out.push(x);
+    for(i = 0; i < succ[x].length; i++){
+      s = succ[x][i];
+      if(--indeg[s] === 0) queue.push(s);
+    }
+  }
+  return out.length === acts.length ? out : null;
+}
+
+/* Transitive closure: { id: Set(every strict descendant) }. Null on a cycle. */
+function closure(acts){
+  var order = topoOrder(acts);
+  if(!order) return null;
+  var succ = successors(acts), out = {}, i, j, k, x, set, sub;
+  for(i = order.length - 1; i >= 0; i--){
+    x = order[i];
+    set = {};
+    for(j = 0; j < succ[x].length; j++){
+      set[succ[x][j]] = true;
+      sub = out[succ[x][j]];
+      for(k in sub) if(sub.hasOwnProperty(k)) set[k] = true;
+    }
+    out[x] = set;
+  }
+  return out;
+}
+
+/* Every path from a start activity (no predecessors) to an end activity
+   (no successors), as an array of id arrays. */
+function enumeratePaths(acts, cap){
+  cap = cap || 20000;
+  var known = knownIds(acts), succ = successors(acts), paths = [], i;
+  function walk(x, cur){
+    if(paths.length >= cap) return;
+    cur.push(x);
+    if(succ[x].length === 0) paths.push(cur.slice());
+    else for(var k = 0; k < succ[x].length; k++) walk(succ[x][k], cur);
+    cur.pop();
+  }
+  for(i = 0; i < acts.length; i++){
+    if(realPreds(acts[i], known).length === 0) walk(acts[i].id, []);
+  }
+  return paths;
+}
+
+/* ---------------------------------------------------------------
+   CPM forward / backward pass.
+   durOf is a parameter so tab 3 can pass te and tab 4 the crashed
+   duration without duplicating the routine.
+   --------------------------------------------------------------- */
+function runCPM(acts, durOf){
+  durOf = durOf || function(a){ return a.dur; };
+  var order = topoOrder(acts);
+  if(!order) return null;
+  var known = knownIds(acts), succ = successors(acts), byId = {}, i, j, x, ps, v;
+  for(i = 0; i < acts.length; i++) byId[acts[i].id] = acts[i];
+
+  var ES = {}, EF = {}, LS = {}, LF = {}, slack = {}, duration = 0;
+
+  /* forward: ES = max(EF of predecessors), EF = ES + t */
+  for(i = 0; i < order.length; i++){
+    x = order[i];
+    ps = realPreds(byId[x], known);
+    v = 0;
+    for(j = 0; j < ps.length; j++) if(EF[ps[j]] > v) v = EF[ps[j]];
+    ES[x] = ps.length ? v : 0;
+    EF[x] = ES[x] + durOf(byId[x]);
+    if(EF[x] > duration) duration = EF[x];
+  }
+
+  /* backward: LF = min(LS of successors), LS = LF - t */
+  for(i = order.length - 1; i >= 0; i--){
+    x = order[i];
+    if(succ[x].length === 0) LF[x] = duration;
+    else {
+      v = Infinity;
+      for(j = 0; j < succ[x].length; j++) if(LS[succ[x][j]] < v) v = LS[succ[x][j]];
+      LF[x] = v;
+    }
+    LS[x] = LF[x] - durOf(byId[x]);
+    slack[x] = LS[x] - ES[x];
+  }
+  return { ES:ES, EF:EF, LS:LS, LF:LF, slack:slack, duration:duration, order:order };
+}
+
+/* Activities with zero slack, in topological order. */
+function criticalActivities(cpm){
+  var out = [], i;
+  for(i = 0; i < cpm.order.length; i++) if(near(cpm.slack[cpm.order[i]], 0)) out.push(cpm.order[i]);
+  return out;
+}
+
+/* Length of one path under a duration function. */
+function pathLength(path, byId, durOf){
+  var s = 0;
+  for(var i = 0; i < path.length; i++) s += durOf(byId[path[i]]);
+  return s;
+}
+
+/* ---------------------------------------------------------------
+   Structural validation of the activity table itself.
+   --------------------------------------------------------------- */
+function validateActs(acts){
+  var errs = [], known = knownIds(acts), seen = {}, i, j, ps;
+  for(i = 0; i < acts.length; i++){
+    var a = acts[i];
+    if(!a.id) errs.push('An activity has no name.');
+    if(seen[a.id]) errs.push('Duplicate activity name "' + a.id + '".');
+    seen[a.id] = true;
+    ps = a.preds || [];
+    for(j = 0; j < ps.length; j++){
+      if(ps[j] === a.id) errs.push('"' + a.id + '" lists itself as a predecessor.');
+      else if(!known[ps[j]]) errs.push('"' + a.id + '" lists unknown predecessor "' + ps[j] + '".');
+    }
+  }
+  if(!topoOrder(acts)) errs.push('The precedence list contains a cycle — the network cannot be drawn.');
+  return errs;
+}
+
+
+/* ---------------------------------------------------------------
+   AOA validation (spec 4.4) — the heart of tab 1.
+
+   nodes : [{id, x, y}]        event nodes the student created
+   arcs  : [{from, to, act}]   act === null means a dummy
+   acts  : the target activity table
+
+   An activity x occupies arc tail(x) -> head(x).  The student's diagram
+   asserts "x precedes y" exactly when tail(y) is reachable from head(x).
+   That induced relation is compared against closure(acts) — NOT against
+   the shape of any reference drawing — so any dummy routing that yields
+   the correct precedence is accepted.
+   --------------------------------------------------------------- */
+
+/* Reflexive reachability over the event-node digraph. */
+function nodeReachability(nodeIds, nsucc){
+  var R = {}, i;
+  for(i = 0; i < nodeIds.length; i++){
+    var start = nodeIds[i], seen = {}, stack = [start];
+    seen[start] = true;
+    while(stack.length){
+      var n = stack.pop(), ss = nsucc[n] || [];
+      for(var k = 0; k < ss.length; k++) if(!seen[ss[k]]){ seen[ss[k]] = true; stack.push(ss[k]); }
+    }
+    R[start] = seen;
+  }
+  return R;
+}
+
+function digraphHasCycle(nodeIds, nsucc){
+  var state = {}, i;   /* 0 unvisited, 1 on stack, 2 done */
+  for(i = 0; i < nodeIds.length; i++) state[nodeIds[i]] = 0;
+  var found = false;
+  function dfs(n){
+    if(found) return;
+    state[n] = 1;
+    var ss = nsucc[n] || [];
+    for(var k = 0; k < ss.length; k++){
+      if(state[ss[k]] === 1){ found = true; return; }
+      if(state[ss[k]] === 0) dfs(ss[k]);
+    }
+    state[n] = 2;
+  }
+  for(i = 0; i < nodeIds.length; i++) if(state[nodeIds[i]] === 0) dfs(nodeIds[i]);
+  return found;
+}
+
+function aoaValidate(nodes, arcs, acts){
+  var rows = [], warnings = [], fatal = [], i, j, arc;
+  var nodeIds = [], nodeSet = {};
+  for(i = 0; i < nodes.length; i++){ nodeIds.push(nodes[i].id); nodeSet[nodes[i].id] = true; }
+
+  /* arcs pointing at nodes that no longer exist */
+  var goodArcs = [];
+  for(i = 0; i < arcs.length; i++){
+    arc = arcs[i];
+    if(nodeSet[arc.from] && nodeSet[arc.to]) goodArcs.push(arc);
+    else fatal.push('An arc refers to a node that is not on the canvas.');
+  }
+
+  /* event-node digraph */
+  var nsucc = {};
+  for(i = 0; i < nodeIds.length; i++) nsucc[nodeIds[i]] = [];
+  for(i = 0; i < goodArcs.length; i++) nsucc[goodArcs[i].from].push(goodArcs[i].to);
+
+  /* rule 2 — acyclicity */
+  var cyclic = digraphHasCycle(nodeIds, nsucc);
+  if(cyclic) fatal.push('The diagram contains a loop — an activity cannot eventually precede itself.');
+
+  /* rule 1 — completeness: each activity on exactly one non-dummy arc */
+  var placement = {};
+  for(i = 0; i < goodArcs.length; i++){
+    arc = goodArcs[i];
+    if(arc.act != null){
+      if(!placement[arc.act]) placement[arc.act] = [];
+      placement[arc.act].push(arc);
+    }
+  }
+
+  /* rule 3 — uniqueness: no two non-dummy arcs on the same node pair */
+  var pair = {};
+  for(i = 0; i < goodArcs.length; i++){
+    arc = goodArcs[i];
+    if(arc.act == null) continue;
+    var key = arc.from + '>' + arc.to;
+    if(!pair[key]) pair[key] = [];
+    pair[key].push(arc.act);
+  }
+
+  var R = cyclic ? null : nodeReachability(nodeIds, nsucc);
+  var target = closure(acts);
+  var arcOf = {};
+  for(var id in placement) if(placement.hasOwnProperty(id) && placement[id].length === 1) arcOf[id] = placement[id][0];
+
+  /* one row per activity */
+  for(i = 0; i < acts.length; i++){
+    var a = acts[i], placed = placement[a.id] || [];
+    if(placed.length === 0){ rows.push({ id:a.id, ok:false, kind:'unplaced', msg:'not on the diagram yet' }); continue; }
+    if(placed.length > 1){
+      rows.push({ id:a.id, ok:false, kind:'duplicate',
+                  msg:'drawn ' + placed.length + ' times — each activity is exactly one arrow' });
+      continue;
+    }
+    var mine = placed[0], sharedKey = mine.from + '>' + mine.to;
+    if(pair[sharedKey].length > 1){
+      var others = [];
+      for(j = 0; j < pair[sharedKey].length; j++) if(pair[sharedKey][j] !== a.id) others.push(pair[sharedKey][j]);
+      rows.push({ id:a.id, ok:false, kind:'sharedPair',
+                  msg:'shares the same start and end node as ' + others.join(', ') +
+                      '. A dummy is required to tell them apart.' });
+      continue;
+    }
+    if(cyclic){ rows.push({ id:a.id, ok:false, kind:'cycle', msg:'cannot be checked until the loop is removed' }); continue; }
+
+    /* rule 4 — precedence, by closure comparison */
+    var missing = [], falsePrec = [];
+    for(j = 0; j < acts.length; j++){
+      var b = acts[j];
+      if(b.id === a.id) continue;
+      var bArc = arcOf[b.id];
+      if(!bArc) continue;                                  /* b not placed — its own row says so */
+      var studentSays = !!(R[mine.to] && R[mine.to][bArc.from]);
+      var shouldBe = !!(target && target[a.id] && target[a.id][b.id]);
+      if(shouldBe && !studentSays) missing.push(b.id);
+      if(!shouldBe && studentSays) falsePrec.push(b.id);
+    }
+    if(missing.length){
+      rows.push({ id:a.id, ok:false, kind:'missing',
+                  msg:'does not reach ' + missing.join(', ') + ' — that precedence is lost' });
+    } else if(falsePrec.length){
+      rows.push({ id:a.id, ok:false, kind:'false',
+                  msg:'wrongly comes before ' + falsePrec.join(', ') + ' — the table does not ask for that' });
+    } else {
+      rows.push({ id:a.id, ok:true, msg:'correct' });
+    }
+  }
+
+  /* rule 5 — connectivity, warning only */
+  if(!cyclic){
+    var indeg = {}, outdeg = {}, starts = [], ends = [];
+    for(i = 0; i < nodeIds.length; i++){ indeg[nodeIds[i]] = 0; outdeg[nodeIds[i]] = 0; }
+    for(i = 0; i < goodArcs.length; i++){ outdeg[goodArcs[i].from]++; indeg[goodArcs[i].to]++; }
+    for(i = 0; i < nodeIds.length; i++){
+      if(indeg[nodeIds[i]] === 0) starts.push(nodeIds[i]);
+      if(outdeg[nodeIds[i]] === 0) ends.push(nodeIds[i]);
+    }
+    if(starts.length > 1) warnings.push('There are ' + starts.length + ' starting nodes (' + starts.join(', ') + '). A project network normally begins at one node.');
+    if(ends.length > 1) warnings.push('There are ' + ends.length + ' finishing nodes (' + ends.join(', ') + '). A project network normally ends at one node.');
+  }
+
+  var allOk = fatal.length === 0;
+  for(i = 0; i < rows.length; i++) if(!rows[i].ok) allOk = false;
+  return { ok:allOk, rows:rows, warnings:warnings, fatal:fatal };
+}
+
+/* ---------------------------------------------------------------
+   Build a correct AOA diagram for a given activity table.
+   Used by guided mode and by "show me". The construction mirrors how the
+   deck draws its examples:
+
+     - activities with no predecessors leave a single START event
+     - an activity whose predecessor set is P starts at the event meaning
+       "every member of P is finished"
+     - that event is REUSED from a predecessor's end event whenever it can be
+       (every successor of that predecessor has exactly the same predecessor
+       set), which is what keeps the dummy count down to the textbook figure
+     - activities with no successors share one FINISH event, unless doing so
+       would put two activities between the same pair of events
+
+   On deck slides 12-13 this yields a:1->2, b:1->3, dummy 3->2, c:2->4, d:3->5,
+   and on slides 15-16 a:1->2, b:1->3, dummy 3->2, c:2->4 — the deck's answers.
+   --------------------------------------------------------------- */
+function buildAOA(acts){
+  var known = knownIds(acts), succ = successors(acts), byId = {}, i, j, k;
+  for(i = 0; i < acts.length; i++) byId[acts[i].id] = acts[i];
+  var order = topoOrder(acts);
+  if(!order) return null;
+
+  var next = 1;
+  function newNode(){ return next++; }
+  var START = newNode(), endNode = {}, arcs = [], mergeFor = {};
+
+  function predKey(x){ return realPreds(byId[x], known).slice().sort().join(','); }
+
+  function tailOf(x){
+    var ps = realPreds(byId[x], known).slice().sort();
+    if(!ps.length) return START;
+    if(ps.length === 1) return endNode[ps[0]];
+    var key = ps.join(',');
+    if(mergeFor[key] != null) return mergeFor[key];
+    /* reuse a predecessor's end event when nothing else leaves it */
+    var chosen = null;
+    for(k = 0; k < ps.length; k++){
+      var p = ps[k], ok = succ[p].length > 0;
+      for(j = 0; j < succ[p].length; j++) if(predKey(succ[p][j]) !== key){ ok = false; break; }
+      if(ok){ chosen = endNode[p]; break; }
+    }
+    if(chosen == null) chosen = newNode();
+    mergeFor[key] = chosen;
+    for(k = 0; k < ps.length; k++)
+      if(endNode[ps[k]] !== chosen) arcs.push({ from:endNode[ps[k]], to:chosen, act:null, why:'logic' });
+    return chosen;
+  }
+
+  for(i = 0; i < order.length; i++){
+    var x = order[i], t = tailOf(x);
+    endNode[x] = newNode();
+    arcs.push({ from:t, to:endNode[x], act:x });
+  }
+
+  /* one finishing event */
+  var terminals = [];
+  for(i = 0; i < acts.length; i++) if(succ[acts[i].id].length === 0) terminals.push(acts[i].id);
+  if(terminals.length > 1){
+    var FIN = newNode();
+    for(k = 0; k < terminals.length; k++){
+      var tid = terminals[k], myArc = null;
+      for(j = 0; j < arcs.length; j++) if(arcs[j].act === tid) myArc = arcs[j];
+      var clash = false;
+      for(j = 0; j < arcs.length; j++)
+        if(arcs[j].act != null && arcs[j].act !== tid && arcs[j].from === myArc.from && arcs[j].to === FIN) clash = true;
+      if(clash) arcs.push({ from:endNode[tid], to:FIN, act:null, why:'identification' });
+      else { myArc.to = FIN; endNode[tid] = FIN; }
+    }
+  }
+
+  /* drop duplicate and self-looping dummies */
+  var seen = {}, clean = [];
+  for(i = 0; i < arcs.length; i++){
+    var a = arcs[i];
+    if(a.act == null){
+      if(a.from === a.to) continue;
+      var key2 = a.from + '>' + a.to;
+      if(seen[key2]) continue;
+      seen[key2] = true;
+    }
+    clean.push(a);
+  }
+
+  /* Repointing terminals at the finish event can leave events with nothing
+     attached — drop them, or they would read as extra start/finish nodes. */
+  var used = {};
+  for(i = 0; i < clean.length; i++){ used[clean[i].from] = true; used[clean[i].to] = true; }
+
+  /* renumber events in topological order so the drawing reads 1..n */
+  var nodeIds = [], nsucc = {};
+  for(i = 1; i < next; i++) if(used[i]){ nodeIds.push(i); nsucc[i] = []; }
+  for(i = 0; i < clean.length; i++) nsucc[clean[i].from].push(clean[i].to);
+  var indeg = {}, queue = [], seq = [];
+  for(i = 0; i < nodeIds.length; i++) indeg[nodeIds[i]] = 0;
+  for(i = 0; i < clean.length; i++) indeg[clean[i].to]++;
+  for(i = 0; i < nodeIds.length; i++) if(indeg[nodeIds[i]] === 0) queue.push(nodeIds[i]);
+  while(queue.length){
+    var n0 = queue.shift();
+    seq.push(n0);
+    for(i = 0; i < nsucc[n0].length; i++) if(--indeg[nsucc[n0][i]] === 0) queue.push(nsucc[n0][i]);
+  }
+  var remap = {};
+  for(i = 0; i < seq.length; i++) remap[seq[i]] = i + 1;
+  var nodes = [];
+  for(i = 0; i < seq.length; i++) nodes.push({ id:i + 1 });
+  for(i = 0; i < clean.length; i++){ clean[i].from = remap[clean[i].from]; clean[i].to = remap[clean[i].to]; }
+
+  return { nodes:nodes, arcs:clean };
+}
+
+/* Which activities force an IDENTIFICATION dummy: identical predecessor sets
+   AND identical successor sets, so AOA would place them between the same two
+   events (deck slides 15-16). Every other dummy is a LOGIC dummy (slides 12-13). */
+function identificationGroups(acts){
+  var known = knownIds(acts), succ = successors(acts), byId = {}, i, groups = {}, out = [];
+  for(i = 0; i < acts.length; i++) byId[acts[i].id] = acts[i];
+  for(i = 0; i < acts.length; i++){
+    var id = acts[i].id;
+    var key = realPreds(byId[id], known).slice().sort().join(',') + '|' + succ[id].slice().sort().join(',');
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(id);
+  }
+  for(var k in groups) if(groups.hasOwnProperty(k) && groups[k].length > 1) out.push(groups[k]);
+  return out;
+}
+
+/* ---------------------------------------------------------------
+   AON validation (spec 4.5) — nodes are auto-placed, only arcs graded.
+   'S' is the virtual start node feeding every activity with no predecessor.
+   --------------------------------------------------------------- */
+function aonTargetEdges(acts){
+  var known = knownIds(acts), out = {}, i, j, ps;
+  for(i = 0; i < acts.length; i++){
+    ps = realPreds(acts[i], known);
+    if(ps.length === 0) out['S>' + acts[i].id] = true;
+    for(j = 0; j < ps.length; j++) out[ps[j] + '>' + acts[i].id] = true;
+  }
+  return out;
+}
+
+function aonValidate(arcs, acts){
+  var target = aonTargetEdges(acts), student = {}, i, k;
+  for(i = 0; i < arcs.length; i++) student[arcs[i].from + '>' + arcs[i].to] = true;
+
+  var missing = [], extra = [];
+  for(k in target) if(target.hasOwnProperty(k) && !student[k]) missing.push(k);
+  for(k in student) if(student.hasOwnProperty(k) && !target[k]) extra.push(k);
+
+  /* an extra edge u->v is "redundant" if u already reaches v another way */
+  var cl = closure(acts), redundant = [], plainExtra = [];
+  for(i = 0; i < extra.length; i++){
+    var parts = extra[i].split('>'), u = parts[0], v = parts[1];
+    if(u !== 'S' && cl && cl[u] && cl[u][v]) redundant.push(extra[i]);
+    else plainExtra.push(extra[i]);
+  }
+  return {
+    ok: missing.length === 0 && extra.length === 0,
+    missing: missing, extra: plainExtra, redundant: redundant
+  };
+}
+
+</script>
+
+<script id="testScript">
+/* =====================================================================
+   ACCEPTANCE TESTS (spec section 10, plus additions from the deck check).
+   Runs both in Node and in the page via ?test — one source of truth.
+   ===================================================================== */
+
+/* ---- preset data used by the tests ---- */
+function mkActs(spec){
+  /* spec: [ [id, dur, "preds,comma,separated"], ... ] */
+  var out = [];
+  for(var i = 0; i < spec.length; i++){
+    out.push({ id: spec[i][0], dur: spec[i][1],
+               preds: spec[i][2] ? spec[i][2].split(',') : [] });
+  }
+  return out;
+}
+
+function TEST_L1(){   /* critical-path example, deck slides 17-28 */
+  return mkActs([['A',8,''],['B',4,''],['C',6,'A'],['D',11,'A'],['E',9,'B'],['F',3,'C'],['G',1,'D,E,F']]);
+}
+function TEST_L3(){   /* assignment network, deck slides 38-39 */
+  return mkActs([['a',5,''],['b',7,'a'],['c',8,'a'],['d',2,'c'],['e',3,''],['f',6,'e'],
+                 ['g',1,''],['h',2,'g'],['i',10,'b,d'],['k',17,'h'],['m',8,'f,i']]);
+}
+function TEST_L11(){  /* CPM on the crashing network, deck slide 27 */
+  return mkActs([['a',6,''],['b',10,'a'],['c',5,''],['d',4,'c'],['e',9,'d'],['f',2,'b,e']]);
+}
+
+/* ---- the suite ---- */
+function runAcceptanceTests(){
+  var out = [], pass = 0, fail = 0;
+  function group(name){ out.push({ group: name }); }
+  function ok(name, cond, got, want){
+    if(cond){ pass++; out.push({ ok:true, name:name, got:got }); }
+    else { fail++; out.push({ ok:false, name:name, got:got, want:want }); }
+  }
+  function eq(name, got, want, tol){ ok(name, near(got, want, tol == null ? 1e-9 : tol), got, want); }
+  function eqs(name, got, want){ ok(name, got === want, got, want); }
+
+  /* ---------- L1 : CPM ---------- */
+  group('L1 — critical path (deck slides 17-28)');
+  var L1 = TEST_L1(), c1 = runCPM(L1);
+  eq('duration', c1.duration, 20);
+  var want = { A:[0,8,0,8,0], B:[0,4,6,10,6], C:[8,14,10,16,2], D:[8,19,8,19,0],
+               E:[4,13,10,19,6], F:[14,17,16,19,2], G:[19,20,19,20,0] };
+  for(var k in want) if(want.hasOwnProperty(k)){
+    eqs(k + ' ES/EF/LS/LF/slack',
+        [c1.ES[k], c1.EF[k], c1.LS[k], c1.LF[k], c1.slack[k]].join(','),
+        want[k].join(','));
+  }
+  eqs('critical activities', criticalActivities(c1).sort().join(''), 'ADG');
+  var byId1 = {}; for(var i = 0; i < L1.length; i++) byId1[L1[i].id] = L1[i];
+  var p1 = enumeratePaths(L1).map(function(p){
+    return p.join('-') + '=' + pathLength(p, byId1, function(a){ return a.dur; });
+  }).sort();
+  eqs('paths', p1.join(' '), 'A-C-F-G=18 A-D-G=20 B-E-G=14');
+
+  /* ---------- L11 : CPM on the crashing network (deck slide 27) ---------- */
+  group('L11 — critical path on the crashing network (deck slide 27)');
+  var L11 = TEST_L11(), c11 = runCPM(L11);
+  eq('duration', c11.duration, 20);
+  eqs('slack a,b,c,d,e,f',
+      ['a','b','c','d','e','f'].map(function(x){ return c11.slack[x]; }).join(','), '2,2,0,0,0,0');
+  eqs('ES a,b,c,d,e,f', ['a','b','c','d','e','f'].map(function(x){ return c11.ES[x]; }).join(','), '0,6,0,5,9,18');
+  eqs('LF a,b,c,d,e,f', ['a','b','c','d','e','f'].map(function(x){ return c11.LF[x]; }).join(','), '8,18,5,9,18,20');
+
+  /* ---------- L3 : paths ---------- */
+  group('L3 — assignment network (deck slides 38-39)');
+  var L3 = TEST_L3(), byId3 = {};
+  for(i = 0; i < L3.length; i++) byId3[L3[i].id] = L3[i];
+  var p3 = enumeratePaths(L3).map(function(p){
+    return p.join('-') + '=' + pathLength(p, byId3, function(a){ return a.dur; });
+  }).sort();
+  eqs('paths', p3.join(' '), 'a-b-i-m=30 a-c-d-i-m=33 e-f-m=17 g-h-k=20');
+  eq('duration', runCPM(L3).duration, 33);
+
+  /* ---------- L5 : AOA validation, identification dummy ---------- */
+  group('L5 — AOA validation, parallel activities (deck slides 15-16)');
+  var L5 = mkActs([['a',3,''],['b',4,''],['c',5,'a,b']]);
+  var nodes4 = [{id:1},{id:2},{id:3},{id:4}];
+  /* a and b between the same pair must fail rule 3 */
+  var bad5 = aoaValidate(nodes4, [{from:1,to:2,act:'a'},{from:1,to:2,act:'b'},{from:2,to:4,act:'c'}], L5);
+  ok('a and b on the same node pair is rejected', !bad5.ok, bad5.ok, false);
+  eqs('the message names a shared node pair',
+      bad5.rows.filter(function(r){ return r.kind === 'sharedPair'; }).length + ' rows', '2 rows');
+  /* correct: b detours via node 3 with a dummy 3->2 */
+  var good5 = aoaValidate(nodes4, [{from:1,to:2,act:'a'},{from:1,to:3,act:'b'},
+                                   {from:3,to:2,act:null},{from:2,to:4,act:'c'}], L5);
+  ok('a:1->2, b:1->3, dummy 3->2, c:2->4 passes', good5.ok, good5.ok, true);
+  /* the mirror image must pass too — closure comparison, not shape matching */
+  var mirror5 = aoaValidate(nodes4, [{from:1,to:2,act:'b'},{from:1,to:3,act:'a'},
+                                     {from:3,to:2,act:null},{from:2,to:4,act:'c'}], L5);
+  ok('the mirror image also passes', mirror5.ok, mirror5.ok, true);
+
+  /* ---------- L4 : AOA validation, logic dummy ---------- */
+  group('L4 — AOA validation, logic dummy (deck slides 12-13)');
+  var L4 = mkActs([['a',3,''],['b',4,''],['c',5,'a,b'],['d',2,'b']]);
+  var nodes5 = [{id:1},{id:2},{id:3},{id:4},{id:5}];
+  var good4 = aoaValidate(nodes5, [{from:1,to:2,act:'a'},{from:1,to:3,act:'b'},
+                                   {from:3,to:2,act:null},{from:2,to:4,act:'c'},
+                                   {from:3,to:5,act:'d'}], L4);
+  ok('correct diagram passes', good4.ok, good4.ok, true);
+  var bad4 = aoaValidate(nodes5, [{from:1,to:2,act:'a'},{from:1,to:3,act:'b'},
+                                  {from:3,to:2,act:null},{from:2,to:4,act:'c'},
+                                  {from:2,to:5,act:'d'}], L4);
+  ok('d placed at 2->5 is rejected', !bad4.ok, bad4.ok, false);
+  var aRow = bad4.rows.filter(function(r){ return r.id === 'a'; })[0];
+  eqs('the fault is reported as false precedence on a', aRow.kind, 'false');
+
+  /* an unplaced activity is reported as such */
+  var partial4 = aoaValidate(nodes5, [{from:1,to:2,act:'a'}], L4);
+  eqs('unplaced activities are named',
+      partial4.rows.filter(function(r){ return r.kind === 'unplaced'; })
+                   .map(function(r){ return r.id; }).join(','), 'b,c,d');
+
+  /* ---------- AON validation ---------- */
+  group('AON validation');
+  var aonActs = mkActs([['a',3,''],['b',4,''],['c',5,'a,b'],['d',2,'b']]);
+  var aonGood = aonValidate([{from:'S',to:'a'},{from:'S',to:'b'},{from:'a',to:'c'},
+                             {from:'b',to:'c'},{from:'b',to:'d'}], aonActs);
+  ok('correct arc set passes', aonGood.ok, aonGood.ok, true);
+  var aonMiss = aonValidate([{from:'S',to:'a'},{from:'S',to:'b'},{from:'a',to:'c'},
+                             {from:'b',to:'d'}], aonActs);
+  eqs('missing edge is named', aonMiss.missing.join(','), 'b>c');
+  /* redundant edge: a->d added where a does not actually reach d -> plain extra */
+  var aonExtra = aonValidate([{from:'S',to:'a'},{from:'S',to:'b'},{from:'a',to:'c'},
+                              {from:'b',to:'c'},{from:'b',to:'d'},{from:'a',to:'d'}], aonActs);
+  eqs('extra edge is named', aonExtra.extra.join(','), 'a>d');
+  /* genuine redundancy: b->e where b already reaches e through c */
+  var chain = mkActs([['b',1,''],['c',1,'b'],['e',1,'c']]);
+  var aonRed = aonValidate([{from:'S',to:'b'},{from:'b',to:'c'},{from:'c',to:'e'},
+                            {from:'b',to:'e'}], chain);
+  eqs('transitively implied edge is flagged redundant', aonRed.redundant.join(','), 'b>e');
+
+  /* ---------- buildAOA : the diagram guided mode draws ---------- */
+  group('buildAOA — generated diagrams');
+  function drawing(acts){
+    var b = buildAOA(acts), out = [];
+    for(var i = 0; i < b.arcs.length; i++)
+      out.push((b.arcs[i].act == null ? 'dummy' : b.arcs[i].act) + ':' + b.arcs[i].from + '->' + b.arcs[i].to);
+    return out.sort().join(' ');
+  }
+  /* deck slides 12-13. Event NUMBERING is not compared — any diagram with the
+     right precedence is correct, which is the whole point of the validator. */
+  var L4b = mkActs([['a',3,''],['b',4,''],['c',5,'a,b'],['d',2,'b']]);
+  var L4d = buildAOA(L4b);
+  ok('L4 drawing validates', aoaValidate(L4d.nodes, L4d.arcs, L4b).ok, true, true);
+  eq ('L4 uses exactly one dummy', L4d.arcs.filter(function(a){ return a.act == null; }).length, 1);
+  eq ('L4 has no orphaned events', L4d.nodes.length, 4);
+  eqs('L4 every event is attached to an arc',
+      (function(){
+        var u = {}, i;
+        for(i = 0; i < L4d.arcs.length; i++){ u[L4d.arcs[i].from] = 1; u[L4d.arcs[i].to] = 1; }
+        for(i = 0; i < L4d.nodes.length; i++) if(!u[L4d.nodes[i].id]) return 'event ' + L4d.nodes[i].id + ' is orphaned';
+        return 'all attached';
+      })(), 'all attached');
+
+  /* deck slides 15-16: one identification dummy */
+  var L5b = mkActs([['a',3,''],['b',4,''],['c',5,'a,b']]);
+  ok('L5 drawing validates', aoaValidate(buildAOA(L5b).nodes, buildAOA(L5b).arcs, L5b).ok, true, true);
+  eq ('L5 uses exactly one dummy',
+      buildAOA(L5b).arcs.filter(function(a){ return a.act == null; }).length, 1);
+  eqs('L5 is flagged as an identification case',
+      identificationGroups(L5b).map(function(g){ return g.join('+'); }).join(' '), 'a+b');
+  eqs('L4 is NOT an identification case', identificationGroups(L4b).length, 0);
+
+  /* M2 — two identification pairs (spec difficulty ladder) */
+  var M2b = mkActs([['a',4,''],['b',4,''],['c',5,'a,b'],['d',3,'a,b']]);
+  eqs('M2 has two identification pairs',
+      identificationGroups(M2b).map(function(g){ return g.join('+'); }).sort().join(' '), 'a+b c+d');
+  ok('M2 drawing validates', aoaValidate(buildAOA(M2b).nodes, buildAOA(M2b).arcs, M2b).ok, true, true);
+
+  /* every lecture preset must produce a diagram the validator accepts */
+  var allSets = { L1:TEST_L1(), L3:TEST_L3(), L11:TEST_L11(),
+                  E1:mkActs([['a',4,''],['b',6,'a'],['c',3,'b'],['d',5,'c']]),
+                  E2:mkActs([['a',5,''],['b',3,''],['c',4,'a'],['d',5,'b'],['e',2,'c,d']]),
+                  M1:mkActs([['a',4,''],['b',6,''],['c',5,'a,b'],['d',7,'b'],['e',3,'c,d']]),
+                  H1:mkActs([['a',6,''],['b',4,''],['c',5,'a'],['d',7,'a,b'],['e',9,'b'],['f',3,'c,d'],['g',2,'d,e']]),
+                  H2:mkActs([['a',3,''],['b',5,''],['c',4,''],['d',6,'a,b'],['e',4,'b,c'],['f',2,'d'],['g',5,'d,e'],['h',3,'f,g']]) };
+  for(var nm in allSets) if(allSets.hasOwnProperty(nm)){
+    var bb = buildAOA(allSets[nm]);
+    var vv = aoaValidate(bb.nodes, bb.arcs, allSets[nm]);
+    ok(nm + ' generated diagram validates', vv.ok,
+       vv.ok ? true : vv.rows.filter(function(r){ return !r.ok; }).map(function(r){ return r.id + ' ' + r.msg; }).join('; '), true);
+    ok(nm + ' generated diagram has one start and one finish', vv.warnings.length === 0,
+       vv.warnings.join(' | ') || 'clean', true);
+  }
+
+  /* ---------- table validation ---------- */
+  group('Activity table validation');
+  eqs('cycle is detected',
+      validateActs(mkActs([['a',1,'b'],['b',1,'a']])).length > 0, true);
+  eqs('unknown predecessor is detected',
+      validateActs(mkActs([['a',1,'zz']]))[0].indexOf('unknown predecessor') > -1, true);
+  eqs('self reference is detected',
+      validateActs(mkActs([['a',1,'a']]))[0].indexOf('itself') > -1, true);
+  eqs('clean table gives no errors', validateActs(TEST_L1()).length, 0);
+
+  return { pass: pass, fail: fail, lines: out };
+}
+</script>
+
+<script>
+/* =====================================================================
+   SHARED SHELL — tab bar, mode switch, preset library, activity editor.
+   Stage 2 of 7. The four module bodies are filled in by later stages.
+   ===================================================================== */
+
+var $ = function(id){ return document.getElementById(id); };
+var PALETTE = ['#2563eb','#16a34a','#ea580c','#9333ea','#0d9488','#dc2626','#ca8a04','#0891b2',
+               '#4f46e5','#65a30d','#db2777','#0284c7'];
+function colorOf(i){ return PALETTE[i % PALETTE.length]; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function numFmt(v){ return v == null ? '' : (Math.round(v * 100) / 100).toString(); }
+function fx(v, n){ return v == null ? '–' : v.toFixed(n == null ? 2 : n); }
+
+/* ---------------------------------------------------------------
+   Preset parser. The compact source format keeps the library readable:
+     "a:6 b:10[a] c:5[a,b]"   =  id : duration [ comma-separated predecessors ]
+   --------------------------------------------------------------- */
+function splitTokens(s){ return s.trim().split(/\s+/); }
+function predsOf(m){ return m ? m.split(',') : []; }
+
+function parseDet(str){
+  var out = [], t = splitTokens(str), i, m;
+  for(i = 0; i < t.length; i++){
+    m = /^([^:]+):([\d.]+)(?:\[([^\]]*)\])?$/.exec(t[i]);
+    out.push({ id:m[1], dur:parseFloat(m[2]), preds:predsOf(m[3]) });
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------
+   Preset library.  Slide numbers refer to "10 Project Management.pptx"
+   (44 slides) and were checked against the deck itself.
+   --------------------------------------------------------------- */
+var PRESETS = {
+  /* ---- lecture examples ---- */
+  L1: { g:'Lecture examples', name:'Critical path network (slides 17–28)',
+        det:'A:8 B:4 C:6[A] D:11[A] E:9[B] F:3[C] G:1[D,E,F]',
+        note:'The deck names these activities three different ways. Here they are <b>A–G</b>; ' +
+             'on the AOA diagram (slides 18, 25, 28) they are the arcs <b>1-2, 1-3, 2-4, 2-5, 3-5, 4-5, 5-6</b>, ' +
+             'and on the AON diagram (slides 23–24) they are the digits <b>1, 3, 2, 5, 4, 6, 7</b>. ' +
+             'Duration 20 days, critical path A–D–G.' },
+  L9: { g:'Lecture examples', name:'Office move — the opening example (slides 4–5)',
+        det:'Locate:8 Interview:4 Order:6[Locate] Remodel:11[Locate] Hire:9[Interview] Setup:3[Order] MoveIn:1[Remodel,Hire,Setup]',
+        note:'Locate facilities · Interview · Order furniture · Remodel · Hire and train · Furniture setup · Move in. ' +
+             'Drawn both ways in the deck: AOA on slide 4, AON on slide 5. Structurally this is the same network as L1.' },
+  L2: { g:'Lecture examples', name:'Exercise — critical path (slide 27)',
+        det:'a:6 b:10[a] c:5 d:4[c] e:9[d] f:2[b,e]',
+        note:'Fully worked on slide 27: duration 20 days, slack 2 on a and b, zero on the rest. ' +
+             'The deck reuses this same network for its crashing example on slides 40–42.' },
+  L3: { g:'Lecture examples', name:'Assignment — critical path (slides 38–39)',
+        det:'a:5 b:7[a] c:8[a] d:2[c] e:3 f:6[e] g:1 h:2[g] i:10[b,d] k:17[h] m:8[f,i]',
+        note:'Paths: a-c-d-i-m = 33, a-b-i-m = 30, g-h-k = 20, e-f-m = 17. Duration 33 days. ' +
+             'The deck also lists a twelfth activity <b>end</b> with predecessors k, m and no duration — omitted here.' },
+  L4: { g:'Lecture examples', name:'Dummy — logic (slides 8–9, 12–14)',
+        det:'a:3 b:4 c:5[a,b] d:2[b]',
+        note:'A <b>logic dummy</b>. c needs both a and b, but d needs only b. If b ended where a ends, ' +
+             'd would inherit a as a predecessor. The dummy carries b forward to c without connecting a to d. ' +
+             'The same table is the AON exercise on slides 8–9. Durations are invented — the deck gives none.' },
+  L5: { g:'Lecture examples', name:'Dummy — parallel activities (slides 15–16)',
+        det:'a:3 b:4 c:5[a,b]',
+        note:'An <b>identification dummy</b>. The logic is already correct — a and b simply cannot both be drawn ' +
+             'between the same two nodes in AOA notation. Durations are invented — the deck gives none.' },
+  L6: { g:'Lecture examples', name:'AOA exercise (slides 6–7)',
+        det:'a:2 b:3 c:4[a] d:4[b] e:2[c]',
+        note:'Durations are <b>invented for this tool</b> so the critical-path module has something to work with — ' +
+             'the deck gives none.' },
+  L7: { g:'Lecture examples', name:'AON exercise (slides 10–11)',
+        det:'1:8 3:4 2:6[1] 5:11[1] 4:9[3] 6:3[2] 7:1[4,5,6]',
+        note:'The deck names these activities with digits. This is <b>the same network as L1</b> ' +
+             '(1=A, 3=B, 2=C, 5=D, 4=E, 6=F, 7=G), so the durations from slides 23–24 apply.' },
+  /* ---- difficulty ladder ---- */
+  E1: { g:'Difficulty ladder', name:'Easy 1 — single chain', det:'a:4 b:6[a] c:3[b] d:5[c]',
+        note:'No branching at all. Every activity is critical; the forward and backward passes are pure addition and subtraction.' },
+  E2: { g:'Difficulty ladder', name:'Easy 2 — two chains merge', det:'a:5 b:3 c:4[a] d:5[b] e:2[c,d]',
+        note:'The first merge point, and the first activity with slack.' },
+  M1: { g:'Difficulty ladder', name:'Medium 1 — one logic dummy', det:'a:4 b:6 c:5[a,b] d:7[b] e:3[c,d]',
+        note:'Needs exactly one logic dummy in AOA.' },
+  M2: { g:'Difficulty ladder', name:'Medium 2 — two parallel pairs', det:'a:4 b:4 c:5[a,b] d:3[a,b]',
+        note:'c and d have identical predecessors, so AOA needs an identification dummy — twice over.' },
+  H1: { g:'Difficulty ladder', name:'Hard 1 — two dummies, near-tied paths',
+        det:'a:6 b:4 c:5[a] d:7[a,b] e:9[b] f:3[c,d] g:2[d,e]',
+        note:'Longest path 16 with two paths at 15 close behind — small changes flip the critical path.' },
+  H2: { g:'Difficulty ladder', name:'Hard 2 — three merge points',
+        det:'a:3 b:5 c:4 d:6[a,b] e:4[b,c] f:2[d] g:5[d,e] h:3[f,g]',
+        note:'Overlapping predecessor sets throughout. Duration 19 days.' }
+};
+
+/* ---------------------------------------------------------------
+   Global state.  Every module reads STATE.acts.
+   --------------------------------------------------------------- */
+var STATE = {
+  acts: [], mode:'guided', tab:'network', notation:'AOA', presetKey:'L1',
+  aoa:{ nodes:[], arcs:[], nextNodeId:1 },
+  aon:{ pos:{}, arcs:[] }
+};
+
+var TABS = [
+  { key:'network', label:'1 · Network diagram', sub:'AOA and AON' },
+  { key:'cp',      label:'2 · Critical path',   sub:'forward and backward pass' }
+];
+
+/* ---------------------------------------------------------------
+   Preset handling
+   --------------------------------------------------------------- */
+function fillPresetSelect(){
+  var groups = [], seen = {}, k;
+  for(k in PRESETS) if(PRESETS.hasOwnProperty(k) && !seen[PRESETS[k].g]){ seen[PRESETS[k].g] = 1; groups.push(PRESETS[k].g); }
+  var h = '';
+  for(var i = 0; i < groups.length; i++){
+    h += '<optgroup label="' + esc(groups[i]) + '">';
+    for(k in PRESETS) if(PRESETS.hasOwnProperty(k) && PRESETS[k].g === groups[i])
+      h += '<option value="' + k + '">' + esc(PRESETS[k].name) + '</option>';
+    h += '</optgroup>';
+  }
+  h += '<optgroup label="Your own"><option value="custom">Custom / edited</option></optgroup>';
+  $('preset').innerHTML = h;
+}
+
+function applyPreset(key){
+  var p = PRESETS[key];
+  if(!p) return;
+  STATE.presetKey = key;
+  STATE.acts = parseDet(p.det);
+  resetDiagrams();
+  $('preset').value = key;
+  redrawAll();
+}
+
+/* A change to the activity set invalidates any diagram the student has drawn,
+   and any part-finished walk through the critical-path passes. */
+function resetDiagrams(){
+  STATE.aoa = { nodes:[], arcs:[], nextNodeId:1 };
+  STATE.aon = { pos:{}, arcs:[] };
+  STATE.cp = null;
+  STATE.net = null;
+}
+function markCustom(){
+  if(STATE.presetKey !== 'custom'){ STATE.presetKey = 'custom'; $('preset').value = 'custom'; }
+}
+
+/* ---------------------------------------------------------------
+   Activity table editor
+   --------------------------------------------------------------- */
+function renderEditor(){
+  var a, i, h = '<table class="editT"><tr>' +
+    '<th></th><th>Activity</th><th>Predecessors</th><th>Duration</th><th></th></tr>';
+  for(i = 0; i < STATE.acts.length; i++){
+    a = STATE.acts[i];
+    h += '<tr><td class="sw"><span style="background:' + colorOf(i) + '"></span></td>';
+    h += '<td><input class="id" data-i="' + i + '" data-k="id" value="' + esc(a.id) + '"></td>';
+    h += '<td><input class="preds" data-i="' + i + '" data-k="preds" value="' + esc((a.preds || []).join(',')) + '"></td>';
+    h += '<td><input type="number" step="any" min="0" data-i="' + i + '" data-k="dur" value="' + numFmt(a.dur) + '"></td>';
+    h += '<td><button class="del" data-del="' + i + '" title="remove">✕</button></td></tr>';
+  }
+  $('editor').innerHTML = h + '</table>';
+}
+
+/* One handler for the whole table. */
+function onEditorInput(e){
+  var t = e.target, i = t.dataset ? t.dataset.i : null, k = t.dataset ? t.dataset.k : null;
+  if(i == null || k == null) return;
+  var a = STATE.acts[+i];
+  if(k === 'id'){
+    var oldId = a.id, newId = t.value.trim();
+    if(newId && newId !== oldId){
+      for(var j = 0; j < STATE.acts.length; j++){
+        STATE.acts[j].preds = (STATE.acts[j].preds || []).map(function(p){ return p === oldId ? newId : p; });
+      }
+      a.id = newId;
+      resetDiagrams();
+    }
+  }
+  else if(k === 'preds'){
+    a.preds = t.value.split(',').map(function(x){ return x.trim(); }).filter(function(x){ return x; });
+    resetDiagrams();
+  }
+  else {
+    var v = parseFloat(t.value);
+    a[k] = isNaN(v) ? null : v;
+  }
+  markCustom();
+  redrawAll(k === 'id' || k === 'preds');   /* re-render the table only when labels changed */
+}
+
+/* ---------------------------------------------------------------
+   Validation panel
+   --------------------------------------------------------------- */
+function renderValidation(){
+  var errs = validateActs(STATE.acts), h = '', i;
+  if(errs.length){
+    h = '<ul class="errList">';
+    for(i = 0; i < errs.length; i++) h += '<li class="err">' + esc(errs[i]) + '</li>';
+    h += '</ul>';
+  } else {
+    var cpm = runCPM(STATE.acts), paths = enumeratePaths(STATE.acts);
+    h = '<ul class="errList"><li class="ok">' + STATE.acts.length + ' activities · ' +
+        paths.length + ' path' + (paths.length === 1 ? '' : 's') + ' · project duration <b>' +
+        numFmt(cpm.duration) + ' days</b></li></ul>';
+  }
+  $('validation').innerHTML = h;
+  return errs.length === 0;
+}
+
+/* ---------------------------------------------------------------
+   Tab bar and module bodies (bodies arrive in later stages)
+   --------------------------------------------------------------- */
+function renderTabBar(){
+  var h = '', i;
+  for(i = 0; i < TABS.length; i++){
+    h += '<button data-tab="' + TABS[i].key + '"' + (STATE.tab === TABS[i].key ? ' class="on"' : '') + '>' +
+         esc(TABS[i].label) + '<span class="tn">' + esc(TABS[i].sub) + '</span></button>';
+  }
+  $('tabbar').innerHTML = h;
+  var bs = $('tabbar').querySelectorAll('button');
+  for(i = 0; i < bs.length; i++) bs[i].addEventListener('click', function(){
+    STATE.tab = this.dataset.tab; renderTabBar(); renderTabBody();
+  });
+}
+
+function renderTabBody(){
+  if(STATE.tab === 'cp') return renderCP();
+  return renderNet();
+}
+
+/* =====================================================================
+   TAB 1 — NETWORK DIAGRAM  (deck slides 4-16)
+   AON: events are auto-placed, the student draws only the arrows.
+   AOA: the student builds everything — events, arrows and dummies.
+   ===================================================================== */
+
+function ensureNetState(){
+  var sig = actsSignature();
+  if(!STATE.net || STATE.net.sig !== sig){
+    STATE.net = { sig:sig, armed:null, sel:null, result:null, banner:null, neutral:false,
+                  gstep:-1, drag:null, selNode:null };
+  }
+}
+
+/* ---- AON: automatic layered placement, S at layer -1 ---- */
+function aonLayout(){
+  var acts = STATE.acts, L = layersOf(acts), cols = {}, maxL = 0, i;
+  for(i = 0; i < acts.length; i++){
+    var l = L[acts[i].id];
+    if(!cols[l]) cols[l] = [];
+    cols[l].push(acts[i].id);
+    if(l > maxL) maxL = l;
+  }
+  var NW = 96, NH = 46, GX = 74, GY = 26, M = 18;
+  var tallest = 1;
+  for(i = 0; i <= maxL; i++) if(cols[i] && cols[i].length > tallest) tallest = cols[i].length;
+  var H = M * 2 + tallest * NH + (tallest - 1) * GY;
+  var pos = { S:{ x:M, y:M + (H - M * 2 - NH) / 2 } };
+  for(i = 0; i <= maxL; i++){
+    var list = cols[i] || [], colH = list.length * NH + (list.length - 1) * GY;
+    var y0 = M + (H - M * 2 - colH) / 2;
+    for(var j = 0; j < list.length; j++)
+      pos[list[j]] = { x: M + (i + 1) * (NW + GX), y: y0 + j * (NH + GY) };
+  }
+  return { pos:pos, W: M * 2 + (maxL + 2) * NW + (maxL + 1) * GX, H:H, NW:NW, NH:NH };
+}
+
+/* Current AON positions: the automatic layout, with any boxes the student has
+   dragged taking precedence. */
+function aonPositions(){
+  var lay = aonLayout(), id;
+  for(id in STATE.aon.pos)
+    if(STATE.aon.pos.hasOwnProperty(id) && lay.pos[id])
+      lay.pos[id] = { x:STATE.aon.pos[id].x, y:STATE.aon.pos[id].y };
+  var maxX = 0, maxY = 0;
+  for(id in lay.pos) if(lay.pos.hasOwnProperty(id)){
+    if(lay.pos[id].x + lay.NW > maxX) maxX = lay.pos[id].x + lay.NW;
+    if(lay.pos[id].y + lay.NH > maxY) maxY = lay.pos[id].y + lay.NH;
+  }
+  lay.W = Math.max(lay.W, maxX + 20);
+  lay.H = Math.max(lay.H, maxY + 20);
+  return lay;
+}
+
+/* An arrow that would pass straight through a box in between is routed around
+   it. Without this, D->G reads as D->F on the lecture example, because F sits
+   exactly on the straight line between them — and if D->G is drawn as critical,
+   the wrong arrow looks critical too.
+
+   Shared by the tab-1 AON canvas and the tab-2 critical-path diagram, which
+   use different box sizes, so NW and NH are parameters.
+   pos: { id: {x, y} } of every box on the canvas, top-left corners. */
+function routedArcPath(a, b, NW, NH, pos, fromId, toId){
+  var x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2;
+  var loY = Math.min(y1, y2) - 8, hiY = Math.max(y1, y2) + 8;
+  var top = Infinity, bot = -Infinity, blocked = false, id;
+  for(id in pos) if(pos.hasOwnProperty(id) && id !== fromId && id !== toId){
+    var p = pos[id];
+    var between = p.x + NW > x1 + 4 && p.x < x2 - 4;
+    if(between){
+      if(p.y + NH > loY && p.y < hiY) blocked = true;
+      if(p.y < top) top = p.y;
+      if(p.y + NH > bot) bot = p.y + NH;
+    }
+  }
+  if(!blocked || top === Infinity){
+    var mx = (x1 + x2) / 2;
+    return 'M' + x1 + ' ' + y1 + ' C' + mx + ' ' + y1 + ', ' + mx + ' ' + y2 + ', ' + (x2 - 3) + ' ' + y2;
+  }
+  var midY = (y1 + y2) / 2, above = top - 24, below = bot + 24;
+  var ry = Math.abs(above - midY) <= Math.abs(below - midY) ? above : below;
+  var q1 = x1 + 46, q2 = x2 - 46, cx = (x1 + x2) / 2;
+  return 'M' + x1 + ' ' + y1 + ' C' + q1 + ' ' + y1 + ', ' + q1 + ' ' + ry + ', ' + cx + ' ' + ry +
+         ' C' + q2 + ' ' + ry + ', ' + q2 + ' ' + y2 + ', ' + (x2 - 3) + ' ' + y2;
+}
+function aonArcPath(a, b, lay, pos, fromId, toId){
+  return routedArcPath(a, b, lay.NW, lay.NH, pos, fromId, toId);
+}
+
+function aonSVG(arcs, opts){
+  opts = opts || {};
+  var lay = aonPositions(), pos = lay.pos, i;
+  var g = '<defs><marker id="an1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">' +
+          '<path d="M0 0 L10 5 L0 10 z" fill="#6b7280"/></marker></defs>';
+  for(i = 0; i < arcs.length; i++){
+    var a = pos[arcs[i].from], b = pos[arcs[i].to];
+    if(!a || !b) continue;
+    var d = aonArcPath(a, b, lay, pos, arcs[i].from, arcs[i].to);
+    g += '<path d="' + d + '" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#an1)"/>';
+    if(opts.clickArcs) g += '<path class="arcHit" d="' + d + '" data-arc="' + i + '"></path>';
+  }
+  var ids = ['S'];
+  for(i = 0; i < STATE.acts.length; i++) ids.push(STATE.acts[i].id);
+  for(i = 0; i < ids.length; i++){
+    var id = ids[i], p = pos[id];
+    if(!p) continue;
+    var isS = id === 'S', seld = opts.sel === id;
+    g += '<rect class="nodeHit' + (opts.draggable ? ' drag' : '') + '" data-node="' + esc(id) + '" x="' + p.x +
+         '" y="' + p.y + '" width="' + lay.NW + '" height="' + lay.NH + '" rx="' + (isS ? 22 : 9) +
+         '" fill="' + (seld ? '#eff6ff' : (isS ? '#f8fafc' : '#fff')) +
+         '" stroke="' + (seld ? '#2563eb' : '#cbd5e1') + '" stroke-width="' + (seld ? 3 : 1.6) + '"/>';
+    g += '<text x="' + (p.x + lay.NW / 2) + '" y="' + (p.y + lay.NH / 2 + 6) + '" text-anchor="middle" font-size="16" ' +
+         'font-weight="700" fill="' + (isS ? '#6b7280' : '#1f2937') + '" pointer-events="none">' + esc(isS ? 'Start' : id) + '</text>';
+  }
+  return '<div class="canvasWrap' + (opts.draggable ? ' build' : '') + '"><svg viewBox="0 0 ' + lay.W + ' ' + lay.H +
+         '" width="' + lay.W + '" height="' + lay.H + '" xmlns="http://www.w3.org/2000/svg">' + g + '</svg></div>';
+}
+
+/* ---- AOA: student-built, draggable events ---- */
+function aoaAutoLayout(nodes, arcs){
+  var idx = {}, i, l;
+  for(i = 0; i < nodes.length; i++) idx[nodes[i].id] = nodes[i];
+  var nsucc = {}, deg = {}, layer = {}, queue = [];
+  for(i = 0; i < nodes.length; i++){ nsucc[nodes[i].id] = []; deg[nodes[i].id] = 0; layer[nodes[i].id] = 0; }
+  for(i = 0; i < arcs.length; i++){ nsucc[arcs[i].from].push(arcs[i].to); deg[arcs[i].to]++; }
+  for(i = 0; i < nodes.length; i++) if(deg[nodes[i].id] === 0) queue.push(nodes[i].id);
+  while(queue.length){
+    var x = queue.shift();
+    for(i = 0; i < nsucc[x].length; i++){
+      var s = nsucc[x][i];
+      if(layer[s] < layer[x] + 1) layer[s] = layer[x] + 1;
+      if(--deg[s] === 0) queue.push(s);
+    }
+  }
+  var cols = {}, maxL = 0;
+  for(i = 0; i < nodes.length; i++){
+    l = layer[nodes[i].id];
+    if(!cols[l]) cols[l] = [];
+    cols[l].push(nodes[i].id);
+    if(l > maxL) maxL = l;
+  }
+  var tallest = 1;
+  for(l = 0; l <= maxL; l++) if(cols[l] && cols[l].length > tallest) tallest = cols[l].length;
+  var GX = 150, GY = 96, M = 48;
+  for(l = 0; l <= maxL; l++){
+    var list = cols[l] || [], off = (tallest - list.length) * GY / 2;
+    for(i = 0; i < list.length; i++){ idx[list[i]].x = M + l * GX; idx[list[i]].y = M + off + i * GY; }
+  }
+}
+
+function aoaSVG(nodes, arcs, opts){
+  opts = opts || {};
+  var byId = {}, i, R = 21;
+  for(i = 0; i < STATE.acts.length; i++) byId[STATE.acts[i].id] = STATE.acts[i];
+  var idx = {}, W = 620, H = 380;
+  for(i = 0; i < nodes.length; i++){
+    idx[nodes[i].id] = nodes[i];
+    if(nodes[i].x + 90 > W) W = nodes[i].x + 90;
+    if(nodes[i].y + 90 > H) H = nodes[i].y + 90;
+  }
+  var g = '<defs><marker id="aa1" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">' +
+          '<path d="M0 0 L10 5 L0 10 z" fill="#6b7280"/></marker>' +
+          '<marker id="aa2" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">' +
+          '<path d="M0 0 L10 5 L0 10 z" fill="#ea580c"/></marker></defs>';
+
+  for(i = 0; i < arcs.length; i++){
+    var A = idx[arcs[i].from], B = idx[arcs[i].to];
+    if(!A || !B) continue;
+    var dx = B.x - A.x, dy = B.y - A.y, len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len, uy = dy / len;
+    var x1 = A.x + ux * R, y1 = A.y + uy * R, x2 = B.x - ux * (R + 5), y2 = B.y - uy * (R + 5);
+    var dummy = arcs[i].act == null;
+    g += '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' +
+         (dummy ? '#ea580c' : '#6b7280') + '" stroke-width="2.2"' + (dummy ? ' stroke-dasharray="7 5"' : '') +
+         ' marker-end="url(#' + (dummy ? 'aa2' : 'aa1') + ')"/>';
+    if(opts.clickArcs)
+      g += '<line class="arcHit" x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" data-arc="' + i + '"></line>';
+    var mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    var label = dummy ? 'dummy' : (arcs[i].act + (byId[arcs[i].act] ? ' (' + numFmt(byId[arcs[i].act].dur) + ')' : ''));
+    g += '<rect x="' + (mx - label.length * 4.1 - 5) + '" y="' + (my - 11) + '" width="' + (label.length * 8.2 + 10) +
+         '" height="20" rx="5" fill="#fff" opacity="0.92" pointer-events="none"/>';
+    g += '<text x="' + mx + '" y="' + (my + 4) + '" text-anchor="middle" font-size="13.5" font-weight="700" fill="' +
+         (dummy ? '#ea580c' : '#1f2937') + '" pointer-events="none">' + esc(label) + '</text>';
+  }
+  for(i = 0; i < nodes.length; i++){
+    var n = nodes[i], seld = opts.sel === n.id;
+    g += '<circle class="nodeHit drag" data-node="' + n.id + '" cx="' + n.x + '" cy="' + n.y + '" r="' + R +
+         '" fill="' + (seld ? '#eff6ff' : '#fff') + '" stroke="' + (seld ? '#2563eb' : '#475569') +
+         '" stroke-width="' + (seld ? 3.4 : 2) + '"/>';
+    g += '<text x="' + n.x + '" y="' + (n.y + 6) + '" text-anchor="middle" font-size="16" font-weight="800" ' +
+         'fill="#1f2937" pointer-events="none">' + n.id + '</text>';
+  }
+  return '<div class="canvasWrap build"><svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H +
+         '" xmlns="http://www.w3.org/2000/svg">' + g + '</svg></div>';
+}
+
+/* ---- guided narration ---- */
+function dummyReasonText(acts){
+  var groups = identificationGroups(acts);
+  var h = '<div class="explain"><b>Why a dummy is needed here</b><br>';
+  if(groups.length){
+    h += 'This table contains an <b>identification dummy</b> case: ';
+    for(var i = 0; i < groups.length; i++)
+      h += (i ? '; also ' : '') + '<b>' + groups[i].join(' and ') + '</b> have the same predecessors <i>and</i> the same successors';
+    h += '. The logic is already correct — activity-on-arrow simply cannot draw two arrows between the same pair of events, ' +
+         'so a dummy separates them. Removing it would not change the project, only the drawing. (Deck slides 15–16.)';
+  } else {
+    h += 'Any dummy here is a <b>logic dummy</b>: one activity needs a predecessor that a second activity must not inherit. ' +
+         'If the two shared an event, the second would pick up a predecessor the table never asked for. ' +
+         'Removing this kind of dummy <i>would</i> change the project. (Deck slides 12–13.)';
+  }
+  return h + '</div>';
+}
+
+function netGuidedSteps(){
+  if(STATE.notation === 'AON'){
+    var t = aonTargetEdges(STATE.acts), out = [], k;
+    for(k in t) if(t.hasOwnProperty(k)){
+      var p = k.split('>');
+      out.push({ from:p[0], to:p[1] });
+    }
+    out.sort(function(a, b){ return a.to === b.to ? (a.from < b.from ? -1 : 1) : 0; });
+    return out;
+  }
+  var d = buildAOA(STATE.acts);
+  return d ? d.arcs : [];
+}
+
+/* ---- the module ---- */
+function renderNet(){
+  ensureNetState();
+  if(validateActs(STATE.acts).length){
+    $('tabBody').innerHTML = '<h2>Network diagram</h2><p class="hint">Fix the activity table above first.</p>';
+    return;
+  }
+  var isAON = STATE.notation === 'AON', guided = STATE.mode === 'guided', i;
+  var h = '<h2>Network diagram</h2>';
+  h += '<div class="row noprint"><span class="seg" id="segNot">' +
+       '<button data-v="AOA"' + (isAON ? '' : ' class="on"') + '>AOA — activity on arrow</button>' +
+       '<button data-v="AON"' + (isAON ? ' class="on"' : '') + '>AON — activity on node</button></span></div>';
+
+  if(STATE.net.banner) h += '<div class="okNote' + (STATE.net.neutral ? ' neutral' : '') + '">' + STATE.net.banner + '</div>';
+
+  var steps = guided ? netGuidedSteps() : null;
+
+  if(guided){
+    var gs = STATE.net.gstep;
+    h += '<div class="row noprint">' +
+         '<button id="netBack"' + (gs < 0 ? ' disabled' : '') + '>◀ Back</button>' +
+         '<button class="primary" id="netStep"' + (gs >= steps.length - 1 ? ' disabled' : '') + '>' +
+             (gs < 0 ? 'Start drawing ▶' : 'Next arrow ▶') + '</button>' +
+         '<button id="netAll">Draw the whole diagram</button>' +
+         '<button id="netReset">↺ Reset</button>' +
+         '<span class="hint">' + (gs < 0 ? 'Not started' : 'Arrow ' + (gs + 1) + ' of ' + steps.length) + '</span></div>';
+    if(gs < 0){
+      h += '<div class="explain">' + (isAON
+        ? 'In <b>AON</b> every activity is a box and the arrows only show precedence. ' +
+          'Because an arrow carries no work, <b>no dummy is ever needed</b> — the deck notes this on slides 13 and 16.'
+        : 'In <b>AOA</b> every activity is an <i>arrow</i> between two numbered events. ' +
+          'An event means "everything arriving here is finished". That is what forces dummies: sometimes the only way to ' +
+          'say "c needs a and b, but d needs only b" is with an extra arrow that consumes no time.') + '</div>';
+    } else {
+      var st = steps[gs];
+      if(isAON){
+        h += '<div class="explain">Arrow <b>' + esc(st.from) + ' → ' + esc(st.to) + '</b>: ' +
+             (st.from === 'S' ? '<b>' + esc(st.to) + '</b> has no predecessors, so it starts from the Start node.'
+                              : '<b>' + esc(st.to) + '</b> cannot begin until <b>' + esc(st.from) + '</b> is finished.') + '</div>';
+      } else if(st.act == null){
+        h += '<div class="explain">Event <b>' + st.from + ' → ' + st.to + '</b> is a <b>dummy</b> (dashed). ' +
+             'It takes no time; it only carries a completion forward so the events line up with the table.</div>';
+        h += dummyReasonText(STATE.acts);
+      } else {
+        var pr = realPreds({ id:st.act, preds:(function(){
+          for(i = 0; i < STATE.acts.length; i++) if(STATE.acts[i].id === st.act) return STATE.acts[i].preds || [];
+          return [];
+        })() }, knownIds(STATE.acts));
+        h += '<div class="explain">Activity <b>' + esc(st.act) + '</b> runs from event <b>' + st.from +
+             '</b> to event <b>' + st.to + '</b>' +
+             (pr.length ? ', because event ' + st.from + ' is the point at which <b>' + pr.join(', ') + '</b> ' +
+                          (pr.length > 1 ? 'are' : 'is') + ' finished.' : ' — it has no predecessors, so it leaves the start event.') +
+             '</div>';
+      }
+      /* On the last arrow, close with the reason the dummies exist — otherwise
+         "Draw the whole diagram" would skip the very point of the exercise. */
+      if(gs === steps.length - 1){
+        var nd = 0;
+        for(i = 0; i < steps.length; i++) if(!isAON && steps[i].act == null) nd++;
+        if(isAON){
+          h += '<div class="explain">The diagram is complete. Notice there are <b>no dummies anywhere</b> — ' +
+               'in AON an arrow carries no work, so precedence can always be drawn directly. ' +
+               'This is the deck\'s note on slides 13 and 16.</div>';
+        } else if(nd){
+          h += '<div class="explain">The diagram is complete, using <b>' + nd + ' dumm' + (nd === 1 ? 'y' : 'ies') + '</b>.</div>';
+          h += dummyReasonText(STATE.acts);
+        } else {
+          h += '<div class="explain">The diagram is complete, and <b>no dummy was needed</b> — ' +
+               'every activity\'s predecessors happened to line up with an existing event.</div>';
+        }
+      }
+    }
+  }
+
+  /* ---- the canvas ---- */
+  if(isAON){
+    var arcs = guided ? steps.slice(0, STATE.net.gstep + 1) : STATE.aon.arcs;
+    if(!guided)
+      h += '<p class="hint noprint">Click a box, then click the box it leads to, to draw an arrow. ' +
+           'Click an arrow to delete it. Boxes cannot be added or removed in AON — they are the activities themselves — ' +
+           'but you can <b>drag</b> them to untangle the drawing.</p>';
+    h += '<div class="row noprint"><button id="aonTidy">Tidy layout</button>' +
+         '<span class="hint">Drag any box to move it. Tidy puts them back on the automatic layout.</span></div>';
+    h += '<div class="netLayout">' +
+         aonSVG(arcs, { sel: guided ? null : STATE.net.selNode, clickArcs: !guided, draggable: true }) +
+         netRefTableHTML() + '</div>';
+  } else {
+    var nodes, aarcs;
+    if(guided){
+      var full = buildAOA(STATE.acts);
+      nodes = full.nodes.slice();
+      aoaAutoLayout(nodes, full.arcs);
+      aarcs = full.arcs.slice(0, STATE.net.gstep + 1);
+    } else {
+      nodes = STATE.aoa.nodes;
+      aarcs = STATE.aoa.arcs;
+      h += '<p class="hint noprint">Add event nodes, then click an activity chip to pick it up, click the event it starts from, ' +
+           'and click the event it ends at. Drag nodes to tidy the drawing. Click an arrow to remove it.</p>';
+      h += aoaPaletteHTML();
+      h += '<div class="row noprint"><button id="aoaAdd">+ Add event node</button>' +
+           '<button id="aoaDel"' + (STATE.net.selNode == null ? ' disabled' : '') + '>✕ Delete selected event</button>' +
+           '<button id="aoaRenum">Renumber events</button>' +
+           '<button id="aoaClear">Clear canvas</button></div>';
+    }
+    h += '<div class="netLayout">' +
+         aoaSVG(nodes, aarcs, { sel: guided ? null : STATE.net.selNode, clickArcs: !guided }) +
+         netRefTableHTML() + '</div>';
+  }
+
+  /* ---- practice controls and results ---- */
+  if(!guided){
+    h += '<div class="row noprint"><button class="primary" id="netCheck">Check my diagram</button>' +
+         '<button id="netShow">Show me</button></div>';
+    if(STATE.net.result) h += netResultHTML(STATE.net.result, isAON);
+  }
+  /* keep the canvas where the student had scrolled it — on a tablet the diagram is
+     wider than the screen, and every click redraws it */
+  var oldWrap = $('tabBody').querySelector('.canvasWrap'),
+      keep = oldWrap ? [oldWrap.scrollLeft, oldWrap.scrollTop] : null;
+  $('tabBody').innerHTML = h;
+  var newWrap = keep ? $('tabBody').querySelector('.canvasWrap') : null;
+  if(newWrap){ newWrap.scrollLeft = keep[0]; newWrap.scrollTop = keep[1]; }
+  wireNet(steps);
+}
+
+/* A compact copy of the activity table, pinned beside the canvas so the
+   student does not have to scroll back up while drawing. In practice mode a
+   tick marks each activity whose arrows are already on the diagram. */
+function netRefTableHTML(){
+  var isAOA = STATE.notation === 'AOA', practice = STATE.mode !== 'guided';
+  var known = knownIds(STATE.acts), done = {}, i, j;
+
+  if(practice){
+    if(isAOA){
+      for(i = 0; i < STATE.aoa.arcs.length; i++)
+        if(STATE.aoa.arcs[i].act != null) done[STATE.aoa.arcs[i].act] = true;
+    } else {
+      var drawn = {};
+      for(i = 0; i < STATE.aon.arcs.length; i++) drawn[STATE.aon.arcs[i].from + '>' + STATE.aon.arcs[i].to] = true;
+      for(i = 0; i < STATE.acts.length; i++){
+        var ps0 = realPreds(STATE.acts[i], known), all = true;
+        if(!ps0.length) all = !!drawn['S>' + STATE.acts[i].id];
+        else for(j = 0; j < ps0.length; j++) if(!drawn[ps0[j] + '>' + STATE.acts[i].id]) all = false;
+        done[STATE.acts[i].id] = all;
+      }
+    }
+  }
+
+  var h = '<div class="netRef"><p class="cap">Activity table</p><table class="dataT">' +
+          '<tr><th>Act</th><th>Preceded by</th><th>t</th>' + (practice ? '<th>✓</th>' : '') + '</tr>';
+  for(i = 0; i < STATE.acts.length; i++){
+    var a = STATE.acts[i], ps = realPreds(a, known);
+    h += '<tr><td class="jb"><span class="sw" style="background:' + colorOf(i) + '"></span>' + esc(a.id) + '</td>' +
+         '<td class="jb" style="font-weight:600">' + (ps.length ? esc(ps.join(', ')) : '—') + '</td>' +
+         '<td>' + numFmt(a.dur) + '</td>' +
+         (practice ? '<td class="tick">' + (done[a.id] ? '✓' : '') + '</td>' : '') + '</tr>';
+  }
+  h += '</table>';
+  if(practice)
+    h += '<p class="cap" style="margin-top:5px">' +
+         (isAOA ? 'A tick means the activity is on the diagram.' : 'A tick means all its arrows are drawn.') + '</p>';
+  return h + '</div>';
+}
+
+function aoaPaletteHTML(){
+  var placed = {}, i;
+  for(i = 0; i < STATE.aoa.arcs.length; i++) if(STATE.aoa.arcs[i].act != null) placed[STATE.aoa.arcs[i].act] = true;
+  var h = '<div class="palette">';
+  for(i = 0; i < STATE.acts.length; i++){
+    var id = STATE.acts[i].id, on = STATE.net.armed === id, isP = placed[id];
+    h += '<span class="chip' + (on ? ' armed' : '') + (isP ? ' placed' : '') + '" data-chip="' + esc(id) + '">' +
+         '<span class="sw" style="background:' + colorOf(i) + '"></span>' + esc(id) + '</span>';
+  }
+  h += '<span class="chip dummy' + (STATE.net.armed === '__dummy' ? ' armed' : '') + '" data-chip="__dummy">dummy</span>';
+  h += '<span class="hint">' + (STATE.net.armed
+        ? 'Now click the event it starts from, then the event it ends at.'
+        : 'Click a chip to pick up an activity.') + '</span></div>';
+  return h;
+}
+
+function netResultHTML(res, isAON){
+  var h = '<ul class="errList">', i;
+  if(isAON){
+    if(res.ok) h += '<li class="ok">Every precedence arrow is correct, and there are no extra ones.</li>';
+    for(i = 0; i < res.missing.length; i++){
+      var m = res.missing[i].split('>');
+      h += '<li class="err">Missing arrow <b>' + esc(m[0]) + ' → ' + esc(m[1]) + '</b>' +
+           (m[0] === 'S' ? ' — ' + esc(m[1]) + ' has no predecessors, so it must start from Start.'
+                         : ' — ' + esc(m[1]) + ' cannot begin until ' + esc(m[0]) + ' is done.') + '</li>';
+    }
+    for(i = 0; i < res.redundant.length; i++){
+      var r = res.redundant[i].split('>');
+      h += '<li class="warn">Arrow <b>' + esc(r[0]) + ' → ' + esc(r[1]) + '</b> is redundant — ' + esc(r[0]) +
+           ' already reaches ' + esc(r[1]) + ' through another activity. Draw immediate predecessors only.</li>';
+    }
+    for(i = 0; i < res.extra.length; i++){
+      var e = res.extra[i].split('>');
+      h += '<li class="err">Arrow <b>' + esc(e[0]) + ' → ' + esc(e[1]) + '</b> is not in the table.</li>';
+    }
+  } else {
+    for(i = 0; i < res.fatal.length; i++) h += '<li class="err">' + esc(res.fatal[i]) + '</li>';
+    for(i = 0; i < res.rows.length; i++)
+      h += '<li class="' + (res.rows[i].ok ? 'ok' : 'err') + '"><b>' + esc(res.rows[i].id) + '</b> — ' + res.rows[i].msg + '</li>';
+    for(i = 0; i < res.warnings.length; i++) h += '<li class="warn">' + esc(res.warnings[i]) + '</li>';
+  }
+  return h + '</ul>';
+}
+
+/* ---- interaction ---- */
+function wireNet(steps){
+  var body = $('tabBody');
+  function on(id, fn){ var e = $(id); if(e) e.addEventListener('click', fn); }
+
+  segWire('segNot', function(v){ STATE.notation = v; STATE.net.gstep = -1; STATE.net.result = null;
+                                 STATE.net.banner = null; STATE.net.selNode = null; STATE.net.armed = null; renderNet(); });
+  on('netStep',  function(){ STATE.net.gstep = Math.min(steps.length - 1, STATE.net.gstep + 1); renderNet(); });
+  on('netBack',  function(){ STATE.net.gstep = Math.max(-1, STATE.net.gstep - 1); renderNet(); });
+  on('netAll',   function(){ STATE.net.gstep = steps.length - 1; renderNet(); });
+  on('netReset', function(){ STATE.net.gstep = -1; renderNet(); });
+
+  on('aoaAdd', function(){
+    var n = STATE.aoa.nextNodeId++;
+    var k = STATE.aoa.nodes.length;
+    STATE.aoa.nodes.push({ id:n, x: 70 + (k % 5) * 130, y: 60 + Math.floor(k / 5) * 100 });
+    renderNet();
+  });
+  on('aoaDel', function(){
+    var id = STATE.net.selNode;
+    if(id == null) return;
+    STATE.aoa.nodes = STATE.aoa.nodes.filter(function(n){ return n.id !== id; });
+    STATE.aoa.arcs  = STATE.aoa.arcs.filter(function(a){ return a.from !== id && a.to !== id; });
+    STATE.net.selNode = null; STATE.net.result = null;
+    renderNet();
+  });
+  on('aoaRenum', function(){
+    var nodes = STATE.aoa.nodes, arcs = STATE.aoa.arcs, i;
+    var nsucc = {}, deg = {}, queue = [], seq = [];
+    for(i = 0; i < nodes.length; i++){ nsucc[nodes[i].id] = []; deg[nodes[i].id] = 0; }
+    for(i = 0; i < arcs.length; i++){ nsucc[arcs[i].from].push(arcs[i].to); deg[arcs[i].to]++; }
+    for(i = 0; i < nodes.length; i++) if(deg[nodes[i].id] === 0) queue.push(nodes[i].id);
+    while(queue.length){
+      var x = queue.shift(); seq.push(x);
+      for(i = 0; i < nsucc[x].length; i++) if(--deg[nsucc[x][i]] === 0) queue.push(nsucc[x][i]);
+    }
+    if(seq.length !== nodes.length){ STATE.net.banner = 'The diagram contains a loop, so the events cannot be renumbered.';
+                                     STATE.net.neutral = true; renderNet(); return; }
+    var remap = {};
+    for(i = 0; i < seq.length; i++) remap[seq[i]] = i + 1;
+    for(i = 0; i < nodes.length; i++) nodes[i].id = remap[nodes[i].id];
+    for(i = 0; i < arcs.length; i++){ arcs[i].from = remap[arcs[i].from]; arcs[i].to = remap[arcs[i].to]; }
+    STATE.aoa.nextNodeId = seq.length + 1;
+    STATE.net.selNode = null;
+    renderNet();
+  });
+  on('aoaClear', function(){
+    STATE.aoa = { nodes:[], arcs:[], nextNodeId:1 };
+    STATE.net.result = null; STATE.net.selNode = null; STATE.net.armed = null;
+    renderNet();
+  });
+
+  on('netCheck', function(){
+    if(STATE.notation === 'AON'){
+      STATE.net.result = aonValidate(STATE.aon.arcs, STATE.acts);
+      STATE.net.banner = STATE.net.result.ok
+        ? '✓ Correct — every precedence relation in the table is drawn, and nothing extra.' : null;
+    } else {
+      STATE.net.result = aoaValidate(STATE.aoa.nodes, STATE.aoa.arcs, STATE.acts);
+      STATE.net.banner = STATE.net.result.ok
+        ? '✓ Correct — your diagram gives exactly the precedence the table asks for.' : null;
+    }
+    STATE.net.neutral = false;
+    renderNet();
+  });
+  on('netShow', function(){
+    if(STATE.notation === 'AON'){
+      var t = aonTargetEdges(STATE.acts), arcs = [], k;
+      for(k in t) if(t.hasOwnProperty(k)){ var p = k.split('>'); arcs.push({ from:p[0], to:p[1] }); }
+      STATE.aon.arcs = arcs;
+    } else {
+      var d = buildAOA(STATE.acts);
+      aoaAutoLayout(d.nodes, d.arcs);
+      STATE.aoa = { nodes:d.nodes, arcs:d.arcs, nextNodeId:d.nodes.length + 1 };
+    }
+    STATE.net.result = null;
+    STATE.net.banner = 'Answer shown — this is one correct diagram. Others are possible: any drawing with the same precedence is right.';
+    STATE.net.neutral = true;
+    renderNet();
+  });
+
+  /* chips */
+  var chips = body.querySelectorAll('[data-chip]');
+  for(var c = 0; c < chips.length; c++) chips[c].addEventListener('click', function(){
+    var id = this.dataset.chip;
+    if(this.classList.contains('placed')) return;
+    STATE.net.armed = STATE.net.armed === id ? null : id;
+    STATE.net.selNode = null;
+    renderNet();
+  });
+
+  /* canvas clicks */
+  var svg = body.querySelector('.canvasWrap svg');
+  if(!svg) return;
+
+  on('aonTidy', function(){ STATE.aon.pos = {}; renderNet(); });
+
+  var hits = svg.querySelectorAll('[data-node]');
+  for(var i = 0; i < hits.length; i++) hits[i].addEventListener('click', function(e){
+    e.stopPropagation();
+    if(NET_SUPPRESS_CLICK){ NET_SUPPRESS_CLICK = false; return; }   /* that was a drag, not a click */
+    var raw = this.dataset.node, id = STATE.notation === 'AON' ? raw : +raw;
+    if(STATE.notation === 'AON'){
+      if(STATE.net.selNode == null){ STATE.net.selNode = id; }
+      else if(STATE.net.selNode === id){ STATE.net.selNode = null; }
+      else {
+        var from = STATE.net.selNode, dup = false;
+        for(var k = 0; k < STATE.aon.arcs.length; k++)
+          if(STATE.aon.arcs[k].from === from && STATE.aon.arcs[k].to === id) dup = true;
+        if(!dup) STATE.aon.arcs.push({ from:from, to:id });
+        STATE.net.selNode = null; STATE.net.result = null;
+      }
+    } else {
+      if(STATE.net.armed){
+        if(STATE.net.selNode == null) STATE.net.selNode = id;
+        else if(STATE.net.selNode === id) STATE.net.selNode = null;
+        else {
+          STATE.aoa.arcs.push({ from:STATE.net.selNode, to:id,
+                                act: STATE.net.armed === '__dummy' ? null : STATE.net.armed });
+          STATE.net.armed = null; STATE.net.selNode = null; STATE.net.result = null;
+        }
+      } else {
+        STATE.net.selNode = STATE.net.selNode === id ? null : id;
+      }
+    }
+    renderNet();
+  });
+
+  var arcHits = svg.querySelectorAll('[data-arc]');
+  for(i = 0; i < arcHits.length; i++) arcHits[i].addEventListener('click', function(e){
+    e.stopPropagation();
+    var k = +this.dataset.arc;
+    if(STATE.notation === 'AON') STATE.aon.arcs.splice(k, 1);
+    else STATE.aoa.arcs.splice(k, 1);
+    STATE.net.result = null;
+    renderNet();
+  });
+
+  svg.addEventListener('click', function(){
+    if(STATE.net.selNode != null || STATE.net.armed){ STATE.net.selNode = null; STATE.net.armed = null; renderNet(); }
+  });
+
+  /* dragging — AOA events are circles, AON activity boxes are rects.
+     Pointer events cover a mouse, a finger and a pen alike. */
+  if(STATE.notation === 'AOA' && STATE.mode !== 'guided'){
+    installNetDrag();
+    var circles = svg.querySelectorAll('circle[data-node]');
+    for(i = 0; i < circles.length; i++) circles[i].addEventListener('pointerdown', function(e){
+      var id = +this.dataset.node, n = null;
+      for(var k = 0; k < STATE.aoa.nodes.length; k++) if(STATE.aoa.nodes[k].id === id) n = STATE.aoa.nodes[k];
+      if(!n) return;
+      startNetDrag(svg, e, n, this);
+    });
+  }
+  if(STATE.notation === 'AON'){
+    installNetDrag();
+    var lay = aonPositions();
+    var rects = svg.querySelectorAll('rect[data-node]');
+    for(i = 0; i < rects.length; i++) rects[i].addEventListener('pointerdown', function(e){
+      var id = this.dataset.node;
+      if(!lay.pos[id]) return;
+      if(!STATE.aon.pos[id]) STATE.aon.pos[id] = { x:lay.pos[id].x, y:lay.pos[id].y };
+      startNetDrag(svg, e, STATE.aon.pos[id], this);
+    });
+  }
+}
+
+/* Dragging redraws the canvas, which destroys the element the drag started on.
+   The listeners therefore live on the window, and NET_DRAG.n is a live reference
+   into STATE.aoa.nodes so it keeps pointing at the right event across redraws. */
+var NET_DRAG = null, NET_SUPPRESS_CLICK = false;
+function netPoint(svg, evt){
+  var r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  return { x:(evt.clientX - r.left) / r.width * vb.width,
+           y:(evt.clientY - r.top) / r.height * vb.height };
+}
+function startNetDrag(svg, e, target, el){
+  if(e.button) return;                        /* main button, finger or pen only */
+  var p = netPoint(svg, e), touch = e.pointerType !== 'mouse';
+  NET_DRAG = { n:target, dx:p.x - target.x, dy:p.y - target.y, moved:false,
+               x0:e.clientX, y0:e.clientY,
+               /* a fingertip wobbles during a tap: ignore the first few pixels so a
+                  tap still selects the node instead of nudging it */
+               slop: touch ? 8 : 0, el: touch ? el : null };
+  e.preventDefault();
+}
+function installNetDrag(){
+  if(installNetDrag.done) return;
+  installNetDrag.done = true;
+  /* Clear the suppression on every fresh press (capture phase, so this runs
+     before the node's own handler). Without it, a drag that ends off the box
+     leaves the flag set and swallows the user's next real click. */
+  window.addEventListener('pointerdown', function(){ NET_SUPPRESS_CLICK = false; }, true);
+  window.addEventListener('pointermove', function(e){
+    if(!NET_DRAG) return;
+    if(!NET_DRAG.moved && Math.abs(e.clientX - NET_DRAG.x0) + Math.abs(e.clientY - NET_DRAG.y0) <= NET_DRAG.slop) return;
+    var svg = $('tabBody') ? $('tabBody').querySelector('.canvasWrap svg') : null;
+    if(!svg) return;
+    var p = netPoint(svg, e);
+    NET_DRAG.n.x = Math.max(30, p.x - NET_DRAG.dx);
+    NET_DRAG.n.y = Math.max(30, p.y - NET_DRAG.dy);
+    NET_DRAG.moved = true;
+    renderNet();
+    /* iPad/iPhone send the rest of a touch to the element the finger first landed
+       on. The redraw has just replaced it, so put the old one back, invisible,
+       or the remaining moves would never reach these window listeners. */
+    var el = NET_DRAG.el, fresh = $('tabBody').querySelector('.canvasWrap svg');
+    if(el && !el.isConnected && fresh){
+      el.style.opacity = '0'; el.style.pointerEvents = 'none';
+      fresh.appendChild(el);
+    }
+  });
+  function endDrag(){
+    /* a drag ends with a click event on the box — swallow it so releasing the
+       mouse does not also select the box or complete an arrow */
+    var d = NET_DRAG;
+    if(d && d.moved) NET_SUPPRESS_CLICK = true;
+    NET_DRAG = null;
+    if(d && d.moved && d.el) renderNet();     /* clear away the invisible touch element */
+  }
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+  /* a finger that starts on a node moves the node, not the page */
+  window.addEventListener('touchmove', function(e){ if(NET_DRAG) e.preventDefault(); }, { passive:false });
+}
+
+/* =====================================================================
+   TAB 2 — CRITICAL PATH  (deck slides 17-28)
+   Reads STATE.acts; draws its own read-only layered network so the module
+   works before the tab-1 canvases exist.
+   ===================================================================== */
+
+/* A signature of the data the module depends on — when it changes, the
+   student's progress through the passes is no longer meaningful. */
+function actsSignature(){
+  return STATE.acts.map(function(a){
+    return a.id + ':' + a.dur + '[' + (a.preds || []).join(',') + ']';
+  }).join(' ') + '|' + STATE.mode;
+}
+function ensureCPState(){
+  var sig = actsSignature();
+  if(!STATE.cp || STATE.cp.sig !== sig){
+    STATE.cp = { sig:sig, step:-1, practice:'forward', banner:null, neutral:false };
+  }
+}
+
+/* Longest-path layering: layer(x) = 0 with no predecessors, else max(layer(preds)) + 1. */
+function layersOf(acts){
+  var order = topoOrder(acts), known = knownIds(acts), byId = {}, L = {}, i, j;
+  for(i = 0; i < acts.length; i++) byId[acts[i].id] = acts[i];
+  for(i = 0; i < order.length; i++){
+    var x = order[i], ps = realPreds(byId[x], known), m = -1;
+    for(j = 0; j < ps.length; j++) if(L[ps[j]] > m) m = L[ps[j]];
+    L[x] = ps.length ? m + 1 : 0;
+  }
+  return L;
+}
+
+/* The activity-on-node network with the ES | t | EF over LS | name | LF box
+   from deck slide 22.  vis controls how much of each box is filled in. */
+function cpNetworkSVG(cpm, vis, nowId){
+  var acts = STATE.acts, L = layersOf(acts), byId = {}, i, j;
+  for(i = 0; i < acts.length; i++) byId[acts[i].id] = acts[i];
+
+  var NW = 122, NH = 64, GX = 68, GY = 24, M = 16;
+  var cols = {}, maxLayer = 0;
+  for(i = 0; i < acts.length; i++){
+    var l = L[acts[i].id];
+    if(!cols[l]) cols[l] = [];
+    cols[l].push(acts[i].id);
+    if(l > maxLayer) maxLayer = l;
+  }
+  var tallest = 0;
+  for(i = 0; i <= maxLayer; i++) if(cols[i] && cols[i].length > tallest) tallest = cols[i].length;
+
+  var W = M * 2 + (maxLayer + 1) * NW + maxLayer * GX;
+  var H = M * 2 + tallest * NH + (tallest - 1) * GY;
+  var pos = {};
+  for(i = 0; i <= maxLayer; i++){
+    var list = cols[i] || [], colH = list.length * NH + (list.length - 1) * GY;
+    var y0 = M + (H - M * 2 - colH) / 2;
+    for(j = 0; j < list.length; j++)
+      pos[list[j]] = { x: M + i * (NW + GX), y: y0 + j * (NH + GY) };
+  }
+
+  var crit = {}, ca = criticalActivities(cpm);
+  for(i = 0; i < ca.length; i++) crit[ca[i]] = true;
+
+  /* arcs first, so the boxes sit on top */
+  var g = '<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">' +
+          '<path d="M0 0 L10 5 L0 10 z" fill="#9ca3af"/></marker>' +
+          '<marker id="ahc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">' +
+          '<path d="M0 0 L10 5 L0 10 z" fill="#16a34a"/></marker></defs>';
+  var known = knownIds(acts);
+  for(i = 0; i < acts.length; i++){
+    var ps = realPreds(acts[i], known);
+    for(j = 0; j < ps.length; j++){
+      var a = pos[ps[j]], b = pos[acts[i].id];
+      if(!a || !b) continue;
+      /* route around any box in between, so a long arrow is not mistaken for
+         one ending at the box it passes */
+      var d = routedArcPath(a, b, NW, NH, pos, ps[j], acts[i].id);
+      var isCrit = crit[ps[j]] && crit[acts[i].id];
+      g += '<path d="' + d + '" fill="none" stroke="' + (isCrit ? '#16a34a' : '#9ca3af') +
+           '" stroke-width="' + (isCrit ? 2.6 : 1.6) + '" marker-end="url(#' + (isCrit ? 'ahc' : 'ah') + ')"/>';
+    }
+  }
+
+  /* boxes */
+  var c1 = 40, c2 = 44;                       /* column widths inside the box */
+  for(i = 0; i < acts.length; i++){
+    var id = acts[i].id, p = pos[id], isC = crit[id], isNow = id === nowId;
+    var fill = isNow ? '#fef9c3' : (isC ? '#f0fdf4' : '#ffffff');
+    var stroke = isNow ? '#d97706' : (isC ? '#16a34a' : '#cbd5e1');
+    var sw = (isNow || isC) ? 2.4 : 1.4;
+    g += '<rect x="' + p.x + '" y="' + p.y + '" width="' + NW + '" height="' + NH + '" rx="7" fill="' + fill +
+         '" stroke="' + stroke + '" stroke-width="' + sw + '"/>';
+    g += '<line x1="' + p.x + '" y1="' + (p.y + NH / 2) + '" x2="' + (p.x + NW) + '" y2="' + (p.y + NH / 2) + '" stroke="#e5e7eb"/>';
+    g += '<line x1="' + (p.x + c1) + '" y1="' + p.y + '" x2="' + (p.x + c1) + '" y2="' + (p.y + NH) + '" stroke="#e5e7eb"/>';
+    g += '<line x1="' + (p.x + c1 + c2) + '" y1="' + p.y + '" x2="' + (p.x + c1 + c2) + '" y2="' + (p.y + NH) + '" stroke="#e5e7eb"/>';
+
+    var showF = vis.showF[id], showB = vis.showB[id];
+    function cell(cx, cy, txt, bold, col){
+      return '<text x="' + cx + '" y="' + cy + '" text-anchor="middle" font-size="14.5" ' +
+             'font-weight="' + (bold ? 800 : 600) + '" fill="' + (col || '#1f2937') + '">' + esc(txt) + '</text>';
+    }
+    var topY = p.y + 21, botY = p.y + 53;
+    g += cell(p.x + c1 / 2,        topY, showB ? numFmt(cpm.LS[id]) : '', false, '#6b7280');
+    g += cell(p.x + c1 + c2 / 2,   topY, id, true, isC ? '#16a34a' : '#1f2937');
+    g += cell(p.x + c1 + c2 + 19,  topY, showB ? numFmt(cpm.LF[id]) : '', false, '#6b7280');
+    g += cell(p.x + c1 / 2,        botY, showF ? numFmt(cpm.ES[id]) : '', false, '#2563eb');
+    g += cell(p.x + c1 + c2 / 2,   botY, numFmt(byId[id].dur), false, '#1f2937');
+    g += cell(p.x + c1 + c2 + 19,  botY, showF ? numFmt(cpm.EF[id]) : '', false, '#2563eb');
+  }
+
+  return '<div class="canvasWrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H +
+         '" xmlns="http://www.w3.org/2000/svg">' + g + '</svg></div>' +
+         '<div class="legendRow"><span><i style="background:#f0fdf4;border:2px solid #16a34a"></i>critical (zero slack)</span>' +
+         '<span>Box layout follows deck slide 22: <b>LS · name · LF</b> on top, <b>ES · t · EF</b> below.</span></div>';
+}
+
+/* ---- the arithmetic, spelled out ---- */
+function forwardText(x, cpm, byId, known){
+  var ps = realPreds(byId[x], known), d = byId[x].dur, i, terms = [], vals = [];
+  if(!ps.length)
+    return '<code>ES(' + x + ') = 0</code> — nothing has to finish first. ' +
+           '<code>EF(' + x + ') = 0 + ' + numFmt(d) + ' = ' + numFmt(cpm.EF[x]) + '</code>';
+  for(i = 0; i < ps.length; i++){ terms.push('EF(' + ps[i] + ')'); vals.push(numFmt(cpm.EF[ps[i]])); }
+  var lhs = ps.length === 1
+    ? 'ES(' + x + ') = ' + terms[0] + ' = ' + numFmt(cpm.ES[x])
+    : 'ES(' + x + ') = max(' + terms.join(', ') + ') = max(' + vals.join(', ') + ') = ' + numFmt(cpm.ES[x]);
+  return '<code>' + lhs + '</code>, so <code>EF(' + x + ') = ' + numFmt(cpm.ES[x]) + ' + ' +
+         numFmt(d) + ' = ' + numFmt(cpm.EF[x]) + '</code>';
+}
+function backwardText(x, cpm, byId, succ){
+  var ss = succ[x], d = byId[x].dur, i, terms = [], vals = [];
+  if(!ss.length)
+    return '<code>LF(' + x + ') = ' + numFmt(cpm.duration) + '</code> — nothing follows it, so it may finish as late as the project. ' +
+           '<code>LS(' + x + ') = ' + numFmt(cpm.duration) + ' − ' + numFmt(d) + ' = ' + numFmt(cpm.LS[x]) + '</code>';
+  for(i = 0; i < ss.length; i++){ terms.push('LS(' + ss[i] + ')'); vals.push(numFmt(cpm.LS[ss[i]])); }
+  var lhs = ss.length === 1
+    ? 'LF(' + x + ') = ' + terms[0] + ' = ' + numFmt(cpm.LF[x])
+    : 'LF(' + x + ') = min(' + terms.join(', ') + ') = min(' + vals.join(', ') + ') = ' + numFmt(cpm.LF[x]);
+  return '<code>' + lhs + '</code>, so <code>LS(' + x + ') = ' + numFmt(cpm.LF[x]) + ' − ' +
+         numFmt(d) + ' = ' + numFmt(cpm.LS[x]) + '</code>';
+}
+
+/* ---- which numbers are currently on screen ---- */
+function cpVisibility(cpm){
+  var order = cpm.order, n = order.length, showF = {}, showB = {}, i;
+  if(STATE.mode === 'guided'){
+    var s = STATE.cp.step;
+    for(i = 0; i <= s && i < n; i++) showF[order[i]] = true;
+    if(s >= n) for(i = 0; i <= s - n && i < n; i++) showB[order[n - 1 - i]] = true;
+  } else {
+    if(STATE.cp.practice !== 'forward') for(i = 0; i < n; i++) showF[order[i]] = true;
+    if(STATE.cp.practice === 'done')    for(i = 0; i < n; i++) showB[order[i]] = true;
+  }
+  return { showF:showF, showB:showB };
+}
+function cpNowId(cpm){
+  if(STATE.mode !== 'guided') return null;
+  var n = cpm.order.length, s = STATE.cp.step;
+  if(s < 0 || s >= 2 * n) return null;
+  return s < n ? cpm.order[s] : cpm.order[n - 1 - (s - n)];
+}
+
+/* ---- tables ---- */
+function cpActivityTable(cpm, vis){
+  var practice = STATE.mode === 'practice', ph = STATE.cp.practice;
+  var crit = {}, ca = criticalActivities(cpm), i;
+  for(i = 0; i < ca.length; i++) crit[ca[i]] = true;
+  var nowId = cpNowId(cpm);
+
+  var h = '<table class="dataT"><tr><th>Activity</th><th>t</th><th>ES</th><th>EF</th>' +
+          '<th>LS</th><th>LF</th><th>Slack</th></tr>';
+  for(i = 0; i < STATE.acts.length; i++){
+    var a = STATE.acts[i], id = a.id;
+    var cls = (id === nowId) ? 'now' : (crit[id] && (!practice || ph === 'done') ? 'crit' : '');
+    h += '<tr class="' + cls + '"><td class="jb">' + esc(id) + '</td><td>' + numFmt(a.dur) + '</td>';
+    if(practice){
+      var fwdDone = ph !== 'forward';
+      h += cpCell('ES', id, cpm, fwdDone, false);
+      h += cpCell('EF', id, cpm, fwdDone, false);
+      var bwdOpen = ph === 'backward' || ph === 'done';
+      h += cpCell('LS', id, cpm, ph === 'done', !bwdOpen);
+      h += cpCell('LF', id, cpm, ph === 'done', !bwdOpen);
+      h += cpCell('SL', id, cpm, ph === 'done', !bwdOpen);
+    } else {
+      h += '<td>' + (vis.showF[id] ? numFmt(cpm.ES[id]) : '') + '</td>';
+      h += '<td>' + (vis.showF[id] ? numFmt(cpm.EF[id]) : '') + '</td>';
+      h += '<td>' + (vis.showB[id] ? numFmt(cpm.LS[id]) : '') + '</td>';
+      h += '<td>' + (vis.showB[id] ? numFmt(cpm.LF[id]) : '') + '</td>';
+      h += '<td>' + (vis.showB[id] ? numFmt(cpm.slack[id]) : '') + '</td>';
+    }
+    h += '</tr>';
+  }
+  return h + '</table>';
+}
+/* one practice cell: an input while its phase is open, the answer once passed, greyed before */
+function cpCell(kind, id, cpm, solved, locked){
+  if(locked) return '<td class="locked">·</td>';
+  if(solved){
+    var v = kind === 'SL' ? cpm.slack[id] : cpm[kind][id];
+    return '<td>' + numFmt(v) + '</td>';
+  }
+  return '<td><input type="number" step="any" data-cp="' + kind + '" data-id="' + esc(id) + '"></td>';
+}
+
+function cpPathTable(cpm){
+  var byId = {}, i;
+  for(i = 0; i < STATE.acts.length; i++) byId[STATE.acts[i].id] = STATE.acts[i];
+  var paths = enumeratePaths(STATE.acts);
+  var rows = paths.map(function(p){
+    return { s:p, L:pathLength(p, byId, function(a){ return a.dur; }) };
+  }).sort(function(x, y){ return y.L - x.L; });
+  var show = STATE.mode !== 'practice' || STATE.cp.practice === 'done';
+  var h = '<table class="dataT"><tr><th>Path</th><th>Length</th><th>Slack</th></tr>';
+  for(i = 0; i < rows.length; i++){
+    var isC = Math.abs(rows[i].L - cpm.duration) < 1e-9;
+    h += '<tr class="' + (isC && show ? 'crit' : '') + '"><td class="jb">' + esc(rows[i].s.join(' – ')) + '</td>' +
+         '<td>' + numFmt(rows[i].L) + '</td><td>' + (show ? numFmt(cpm.duration - rows[i].L) : '') + '</td></tr>';
+  }
+  return h + '</table>';
+}
+
+var CP_DEFS =
+  '<div class="defs">' +
+  '<div><b>ES</b> — earliest start. The earliest an activity can begin, assuming every preceding activity <i>finishes</i> as early as possible.</div>' +
+  '<div><b>EF</b> — earliest finish. <code>EF = ES + t</code></div>' +
+  '<div><b>LS</b> — latest start without delaying the project. <code>LS = LF − t</code></div>' +
+  '<div><b>LF</b> — latest an activity can <i>finish</i> without delaying the project.</div>' +
+  '<div><b>Slack</b> — spare time. <code>Slack = LS − ES = LF − EF</code>. Zero slack means the activity is on the critical path.</div>' +
+  '</div>';
+
+/* ---- the module ---- */
+function renderCP(){
+  ensureCPState();
+  var errs = validateActs(STATE.acts);
+  if(errs.length){
+    $('tabBody').innerHTML = '<h2>Critical path</h2><p class="hint">Fix the activity table above first.</p>';
+    return;
+  }
+  var cpm = runCPM(STATE.acts), byId = {}, known = knownIds(STATE.acts), succ = successors(STATE.acts), i;
+  for(i = 0; i < STATE.acts.length; i++) byId[STATE.acts[i].id] = STATE.acts[i];
+  var n = cpm.order.length, vis = cpVisibility(cpm), nowId = cpNowId(cpm);
+
+  var h = '<h2>Critical path</h2>';
+  if(STATE.cp.banner) h += '<div class="okNote' + (STATE.cp.neutral ? ' neutral' : '') + '">' + STATE.cp.banner + '</div>';
+
+  if(STATE.mode === 'guided'){
+    var s = STATE.cp.step;
+    h += '<div class="row noprint">' +
+         '<button id="cpBack"' + (s < 0 ? ' disabled' : '') + '>◀ Back</button>' +
+         '<button class="primary" id="cpStep"' + (s >= 2 * n ? ' disabled' : '') + '>' +
+             (s < 0 ? 'Start the forward pass ▶' : 'Step ▶') + '</button>' +
+         '<button id="cpAll">Run to the end</button>' +
+         '<button id="cpReset">↺ Reset</button>' +
+         '<span class="hint">' + (s < 0 ? 'Not started' :
+             s < n ? 'Forward pass — activity ' + (s + 1) + ' of ' + n :
+             s < 2 * n ? 'Backward pass — activity ' + (s - n + 1) + ' of ' + n : 'Complete') + '</span></div>';
+    if(s < 0){
+      h += '<div class="explain">The <b>forward pass</b> sweeps left to right and finds how early each activity can happen. ' +
+           'The <b>backward pass</b> then sweeps right to left and finds how late it may happen without pushing the project out. ' +
+           'The gap between the two is slack.</div>';
+    } else if(s < n){
+      h += '<div class="explain"><b>Forward pass · ' + esc(nowId) + '</b><br>' + forwardText(nowId, cpm, byId, known) + '</div>';
+    } else if(s < 2 * n){
+      if(s === n)
+        h += '<div class="explain">The forward pass gives a project duration of <b>' + numFmt(cpm.duration) + ' days</b>. ' +
+             'The backward pass now works back from that figure.</div>';
+      h += '<div class="explain"><b>Backward pass · ' + esc(nowId) + '</b><br>' + backwardText(nowId, cpm, byId, succ) + '</div>';
+    } else {
+      h += '<div class="explain">Both passes are done. <code>Slack = LS − ES</code>, and the activities with ' +
+           '<b>zero slack</b> form the critical path: <b>' + criticalActivities(cpm).join(' – ') + '</b>. ' +
+           'Delay any one of them and the whole project slips.</div>';
+    }
+  } else {
+    var ph = STATE.cp.practice;
+    if(ph === 'forward'){
+      h += '<div class="practice"><div class="q">Step 1 — the forward pass</div>' +
+           'Fill in <b>ES</b> and <b>EF</b> for every activity, working left to right. ' +
+           '<code>ES = max(EF of predecessors)</code>, <code>EF = ES + t</code>.' +
+           '<div class="row"><button class="primary" id="cpCheckF">Check</button>' +
+           '<button id="cpRevealF">Show answer</button></div>' +
+           '<div class="hint">The path table stays hidden until you answer — it gives the durations away.</div>' +
+           '<div class="fb" id="cpFb"></div></div>';
+    } else if(ph === 'backward'){
+      h += '<div class="practice"><div class="q">Step 2 — the backward pass</div>' +
+           'Now fill in <b>LS</b>, <b>LF</b> and <b>Slack</b>, working right to left. ' +
+           '<code>LF = min(LS of successors)</code>, <code>LS = LF − t</code>, <code>Slack = LS − ES</code>. ' +
+           'The last activities may finish as late as day <b>' + numFmt(cpm.duration) + '</b>.' +
+           '<div class="row"><button class="primary" id="cpCheckB">Check</button>' +
+           '<button id="cpRevealB">Show answer</button></div>' +
+           '<div class="fb" id="cpFb"></div></div>';
+    }
+  }
+
+  h += cpNetworkSVG(cpm, vis, nowId);
+  h += '<div class="cols2"><div>' + cpActivityTable(cpm, vis) + '</div>';
+  if(STATE.mode !== 'practice' || STATE.cp.practice === 'done')
+    h += '<div>' + cpPathTable(cpm) + '</div>';
+  h += '</div>';
+  h += '<h2 style="margin-top:18px;font-size:17px">What the four numbers mean</h2>' + CP_DEFS;
+  $('tabBody').innerHTML = h;
+  wireCP(cpm, n);
+}
+
+function wireCP(cpm, n){
+  function on(id, fn){ var e = $(id); if(e) e.addEventListener('click', fn); }
+  on('cpStep',  function(){ STATE.cp.step = Math.min(2 * n, STATE.cp.step + 1); STATE.cp.banner = null; renderCP(); });
+  on('cpBack',  function(){ STATE.cp.step = Math.max(-1, STATE.cp.step - 1); STATE.cp.banner = null; renderCP(); });
+  on('cpAll',   function(){ STATE.cp.step = 2 * n; STATE.cp.banner = null; renderCP(); });
+  on('cpReset', function(){ STATE.cp.step = -1; STATE.cp.banner = null; renderCP(); });
+  on('cpCheckF',  function(){ cpCheck('forward', cpm); });
+  on('cpCheckB',  function(){ cpCheck('backward', cpm); });
+  on('cpRevealF', function(){
+    STATE.cp.practice = 'backward';
+    STATE.cp.banner = 'Answer shown — ES and EF are filled in below. Project duration <b>' + numFmt(cpm.duration) + ' days</b>.';
+    STATE.cp.neutral = true; renderCP();
+  });
+  on('cpRevealB', function(){
+    STATE.cp.practice = 'done';
+    STATE.cp.banner = 'Answer shown — the critical path is <b>' + criticalActivities(cpm).join(' – ') + '</b>.';
+    STATE.cp.neutral = true; renderCP();
+  });
+}
+
+function cpCheck(phase, cpm){
+  var ins = $('tabBody').querySelectorAll('input[data-cp]'), allGood = true, i, wrong = 0;
+  for(i = 0; i < ins.length; i++){
+    var inp = ins[i], kind = inp.dataset.cp, id = inp.dataset.id;
+    var want = kind === 'SL' ? cpm.slack[id] : cpm[kind][id];
+    var ok = Math.abs(parseFloat(inp.value) - want) < 0.011;
+    inp.className = ok ? 'good' : 'badIn';
+    if(!ok){ allGood = false; wrong++; }
+  }
+  if(!allGood){
+    var fb = $('cpFb');
+    if(fb){
+      fb.className = 'fb badFb';
+      fb.textContent = wrong + (wrong === 1 ? ' box is' : ' boxes are') + ' not right yet — the red ones. ' +
+        (phase === 'forward'
+          ? 'Remember ES is the LARGEST of the predecessors’ EF values, because every one of them must finish first.'
+          : 'Remember LF is the SMALLEST of the successors’ LS values, because the earliest of them sets the deadline.');
+    }
+    return;
+  }
+  if(phase === 'forward'){
+    STATE.cp.practice = 'backward';
+    STATE.cp.banner = '✓ Forward pass correct. The project takes <b>' + numFmt(cpm.duration) +
+                      ' days</b> — that is the largest EF in the table. Now work backwards.';
+    STATE.cp.neutral = false;
+  } else {
+    STATE.cp.practice = 'done';
+    STATE.cp.banner = '✓ All correct. The critical path is <b>' + criticalActivities(cpm).join(' – ') +
+                      '</b> — the activities with zero slack.';
+    STATE.cp.neutral = false;
+  }
+  renderCP();
+}
+
+/* ---------------------------------------------------------------
+   Random problem generator (spec 9.4)
+   --------------------------------------------------------------- */
+function randomProblem(difficulty){
+  var cfg = { easy:{ n:[4,5], p:0.35 }, medium:{ n:[6,8], p:0.35 }, hard:{ n:[8,11], p:0.4 } }[difficulty];
+  var allowTie = difficulty === 'hard';
+
+  for(var attempt = 0; attempt < 400; attempt++){
+    var n = cfg.n[0] + Math.floor(Math.random() * (cfg.n[1] - cfg.n[0] + 1));
+    var acts = [], i, j;
+    for(i = 0; i < n; i++){
+      var preds = [];
+      for(j = 0; j < i; j++) if(Math.random() < cfg.p) preds.push('abcdefghijkl'[j]);
+      acts.push({ id:'abcdefghijkl'[i], preds:preds, dur:1 + Math.floor(Math.random() * 12) });
+    }
+    /* keep only immediate predecessors so the table is a clean cover */
+    var cl = closure(acts);
+    for(i = 0; i < acts.length; i++){
+      acts[i].preds = acts[i].preds.filter(function(p){
+        return !acts[i].preds.some(function(q){ return q !== p && cl[q] && cl[q][p]; });
+      });
+    }
+    if(!isOneComponent(acts)) continue;
+
+    var paths = enumeratePaths(acts);
+    if(paths.length < 2) continue;
+    var byId = {};
+    for(i = 0; i < acts.length; i++) byId[acts[i].id] = acts[i];
+    var lens = paths.map(function(p){ return pathLength(p, byId, function(a){ return a.dur; }); });
+    var mx = Math.max.apply(null, lens);
+    var ties = lens.filter(function(L){ return Math.abs(L - mx) < 1e-9; }).length;
+    if(ties > 1 && !allowTie) continue;
+    return acts;
+  }
+  return null;
+}
+
+/* Union-find over precedence edges — the network must be one piece. */
+function isOneComponent(acts){
+  var parent = {}, i, j;
+  function find(x){ while(parent[x] !== x) x = parent[x] = parent[parent[x]]; return x; }
+  function union(a, b){ parent[find(a)] = find(b); }
+  for(i = 0; i < acts.length; i++) parent[acts[i].id] = acts[i].id;
+  for(i = 0; i < acts.length; i++)
+    for(j = 0; j < acts[i].preds.length; j++) union(acts[i].id, acts[i].preds[j]);
+  var roots = {}, count = 0;
+  for(i = 0; i < acts.length; i++){ var r = find(acts[i].id); if(!roots[r]){ roots[r] = 1; count++; } }
+  return count === 1;
+}
+
+/* ---------------------------------------------------------------
+   Wiring
+   --------------------------------------------------------------- */
+function redrawAll(rebuildEditor){
+  if(rebuildEditor !== false) renderEditor();
+  var note = PRESETS[STATE.presetKey];
+  $('presetNote').innerHTML = note && note.note ? '<div class="presetNote">' + note.note + '</div>' : '';
+  renderValidation();
+  renderTabBody();
+}
+
+function segWire(id, fn){
+  $(id).addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if(!b) return;
+    var kids = $(id).children;
+    for(var i = 0; i < kids.length; i++) kids[i].className = kids[i] === b ? 'on' : '';
+    fn(b.dataset.v);
+  });
+}
+
+function initShell(){
+  fillPresetSelect();
+  renderTabBar();
+  $('editor').addEventListener('input', onEditorInput);
+  $('editor').addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('button[data-del]') : null;
+    if(!b) return;
+    STATE.acts.splice(+b.dataset.del, 1);
+    resetDiagrams(); markCustom(); redrawAll();
+  });
+  $('preset').addEventListener('change', function(e){
+    if(e.target.value !== 'custom') applyPreset(e.target.value);
+  });
+  segWire('segMode', function(v){ STATE.mode = v; renderTabBody(); });
+  $('btnAdd').addEventListener('click', function(){
+    var used = {}, i;
+    for(i = 0; i < STATE.acts.length; i++) used[STATE.acts[i].id] = 1;
+    var id = 'a';
+    for(i = 0; i < 26; i++) if(!used['abcdefghijklmnopqrstuvwxyz'[i]]){ id = 'abcdefghijklmnopqrstuvwxyz'[i]; break; }
+    STATE.acts.push({ id:id, preds:[], dur:1 });
+    resetDiagrams(); markCustom(); redrawAll();
+  });
+  $('btnRandom').addEventListener('click', function(){
+    var acts = randomProblem($('selDiff').value);
+    /* shown on the page: alert() boxes may be blocked when the file is opened on an iPad/iPhone */
+    if(!acts){ $('validation').innerHTML = '<ul class="errList"><li class="warn">Could not build a problem meeting the constraints — press Generate problem again.</li></ul>'; return; }
+    STATE.acts = acts;
+    resetDiagrams(); markCustom(); redrawAll();
+  });
+  $('btnPrint').addEventListener('click', function(){ window.print(); });
+
+  applyPreset('L1');
+}
+
+/* ---- test runner in the page ----
+   Triggered by ?test or #test. Both are supported because some viewers
+   (and the in-app preview pane) drop the query string from a file:// URL. */
+function showAcceptanceTests(){
+  var res = runAcceptanceTests(), html = '';
+  for(var i = 0; i < res.lines.length; i++){
+    var L = res.lines[i];
+    if(L.group){ html += '<h3>' + L.group + '</h3>'; continue; }
+    html += L.ok
+      ? '<div class="p">  ok   ' + L.name + '  =  ' + L.got + '</div>'
+      : '<div class="f">  FAIL ' + L.name + '  got ' + L.got + ', want ' + L.want + '</div>';
+  }
+  var tally = '<div class="tally ' + (res.fail ? 'bad' : 'ok') + '">' +
+      (res.fail ? res.fail + ' FAILED, ' + res.pass + ' passed'
+                : 'all ' + res.pass + ' checks passed') + '</div>';
+  document.getElementById('testOut').innerHTML = tally + html;
+  document.getElementById('testCard').style.display = '';
+  document.getElementById('app').style.display = 'none';
+  return res;
+}
+
+if(/[?&]test\b/.test(location.search) || /^#test\b/.test(location.hash)) showAcceptanceTests();
+else initShell();
+</script>
+</body>
+</html>

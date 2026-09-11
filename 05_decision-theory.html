@@ -1,0 +1,1989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decision Theory — IES 303</title>
+<!--
+  Decision theory teaching tool — IES 303 Engineering Management (SIIT), Lecture 05.
+  Standalone page: open directly in any browser, no server needed.
+
+  Mode A  Payoff table  — Maximin, Maximax, Laplace, Minimax regret, EMV, EVPI
+  Mode B  Decision tree — build, edit, fold back
+
+  Objective is PROFIT / maximize throughout; the deck has no cost-minimising table.
+  Wording follows the deck: "expected payoff under certainty", not "EVwPI"; a decision
+  node CIRCLES its surviving branch rather than striking the rejected ones.
+
+  Add ?test (or #test) to the URL to run the acceptance suite from spec section 6.
+-->
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --ok:#16a34a;     --ok-soft:#f0fdf4;
+    --warn:#d97706;   --warn-soft:#fffbeb;
+    --bad:#dc2626;    --bad-soft:#fef2f2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);
+       background:#fafafa;font-size:16px;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px}
+  header h1{margin:0;font-size:29px;font-weight:700}
+  header .sub{margin:4px 0 20px;color:var(--muted)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;
+        margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 10px;font-size:19px}
+  .hidden{display:none !important}
+  .hint{color:var(--muted);font-size:13.5px}
+  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:10px 0}
+  label.fld{display:flex;align-items:center;gap:7px;font-weight:600;font-size:15px}
+  select,input[type=text],input[type=number]{font:inherit;padding:6px 9px;border:1px solid var(--line);
+        border-radius:8px;background:#fff}
+  input[type=number]{width:88px;text-align:center}
+  button{font:inherit;font-weight:600;padding:8px 15px;border:1px solid var(--line);border-radius:10px;
+         background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:none;border-radius:0;padding:8px 14px;background:#fff;font-weight:600}
+  .seg button.on{background:var(--accent);color:#fff}
+
+  .tabbar{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;
+          margin-bottom:18px;background:#fff}
+  .tabbar button{flex:1;border:none;border-radius:0;padding:13px 10px;background:#fff;font-weight:700;
+                 font-size:15.5px;border-right:1px solid var(--line);line-height:1.25}
+  .tabbar button:last-child{border-right:none}
+  .tabbar button .tn{display:block;font-size:12px;font-weight:600;color:var(--muted)}
+  .tabbar button.on{background:var(--accent);color:#fff}
+  .tabbar button.on .tn{color:#dbeafe}
+
+  /* editors and result tables */
+  table.dataT{border-collapse:collapse;font-size:15.5px;margin:10px 0}
+  table.dataT th{background:#f8fafc;color:var(--muted);font-size:13px;padding:7px 13px;
+                 border:1px solid var(--line);white-space:nowrap}
+  table.dataT td{padding:6px 13px;border:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+  table.dataT td.jb{text-align:left;font-weight:700;white-space:nowrap}
+  table.dataT td.dim,table.dataT th.dim{color:#c7cdd6}
+  table.dataT tr.win td{background:var(--ok-soft)}
+  table.dataT tr.win td.jb{color:var(--ok)}
+  table.dataT td.mark{background:var(--accent-soft);color:var(--accent);font-weight:800}
+  table.dataT td.pick{cursor:pointer}
+  table.dataT td.chosen{box-shadow:inset 0 0 0 2.5px var(--accent);background:var(--accent-soft);
+                        color:var(--accent);font-weight:800}
+  /* the alternative the student has picked as this criterion's answer */
+  table.dataT td.jb.selectable{cursor:pointer}
+  table.dataT tr.picked td{background:var(--accent-soft)}
+  table.dataT tr.picked td.jb{color:var(--accent)}
+  table.dataT td.jb .tick{color:var(--accent);font-weight:800;margin-left:7px}
+  table.dataT td.echo{color:var(--accent);font-weight:800;background:var(--accent-soft)}
+  .pickState{font-size:13.5px;color:var(--muted);margin-top:8px}
+  .pickState b{color:var(--accent)}
+  table.dataT td.good{background:var(--ok-soft);color:var(--ok);font-weight:800}
+  table.dataT td.badc{background:var(--bad-soft);color:var(--bad);font-weight:800}
+  table.dataT input{width:78px;font:inherit;font-size:15px;text-align:center;border:1.5px solid var(--line);
+                    border-radius:7px;padding:5px 3px}
+  table.dataT input:focus{border-color:var(--accent);outline:none}
+  table.dataT input.good{border-color:var(--ok);background:var(--ok-soft)}
+  table.dataT input.badIn{border-color:var(--bad);background:var(--bad-soft)}
+  table.dataT input.nm{width:120px;text-align:left;font-weight:700;border-color:transparent;background:transparent}
+  table.dataT input.nm:focus{border-color:var(--line);background:#fff}
+  .probSum{font-weight:700;font-size:14px}
+  .probSum.ok{color:var(--ok)} .probSum.bad{color:var(--bad)}
+
+  /* panels */
+  .explain{background:var(--accent-soft);border-radius:10px;padding:13px 18px;margin:12px 0;font-size:16px}
+  .explain b{color:var(--accent)}
+  .explain code{font-family:Consolas,"Courier New",monospace;font-size:15.5px;background:#fff;
+                padding:1px 5px;border-radius:5px}
+  .practice{background:var(--warn-soft);border:1px solid #fde68a;border-radius:10px;padding:14px 18px;margin:12px 0}
+  .practice .q{font-weight:700;margin-bottom:8px}
+  .fb{margin-top:10px;font-weight:700}
+  .fb.good{color:var(--ok)} .fb.badFb{color:var(--bad)}
+  .okNote{color:var(--ok);font-weight:700;margin:10px 0;background:var(--ok-soft);border:1px solid #bbf7d0;
+          border-radius:10px;padding:11px 16px;font-size:16.5px}
+  .okNote.neutral{color:var(--muted);background:#f8fafc;border-color:var(--line)}
+  ul.errList{list-style:none;margin:8px 0 0;padding:0}
+  ul.errList li{padding:7px 12px;border-radius:8px;margin-bottom:5px;font-size:14.5px}
+  ul.errList li.err{background:var(--bad-soft);color:var(--bad);border:1px solid #fecaca}
+  ul.errList li.ok{background:var(--ok-soft);color:var(--ok);border:1px solid #bbf7d0}
+  ul.errList li.warn{background:var(--warn-soft);color:var(--warn);border:1px solid #fde68a}
+  .cols2{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+  .cols2 > *{flex:0 1 auto}
+
+  /* tree canvas */
+  .canvasWrap{border:1px solid var(--line);border-radius:12px;background:#fff;overflow:auto;padding:6px;
+              flex:1 1 520px;min-width:0}
+  .canvasWrap svg{display:block}
+  .canvasWrap svg .hit{cursor:pointer}
+  .treeLayout{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+  .inspector{flex:0 0 250px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}
+  .inspector h3{margin:0 0 8px;font-size:15px}
+  .inspector .row{margin:7px 0;gap:8px}
+  .inspector button{padding:6px 11px;font-size:13.5px}
+  .inspector input[type=number]{width:80px}
+  .legendRow{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px}
+  .canvasWrap svg{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+
+  /* mouse only: hover effects (on touch screens they stick after a tap) */
+  @media (hover:hover){
+    button:hover{background:#f3f4f6}
+    button.primary:hover{background:#1d4ed8}
+    table.dataT td.pick:hover{box-shadow:inset 0 0 0 2px var(--accent)}
+    table.dataT td.jb.selectable:hover{background:var(--accent-soft);color:var(--accent)}
+    table.dataT input.nm:hover{border-color:var(--line);background:#fff}
+  }
+
+  /* touch screens (iPad / iPhone); desktop with a mouse is unaffected */
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+  @media (pointer:coarse){
+    /* iOS zooms in on any text box under 16px and does not zoom back out */
+    input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea{font-size:16px}
+    button, select{min-height:44px}
+    input[type=checkbox]{width:22px;height:22px}
+    table.dataT td.pick, table.dataT td.jb.selectable{height:44px}
+  }
+
+  /* tablet portrait and phones: wide tables scroll inside their own box */
+  @media screen and (max-width:820px){
+    table.dataT{display:block;max-width:100%;overflow-x:auto}
+    .cols2 > *{min-width:0;max-width:100%}
+    .canvasWrap{flex-basis:380px}          /* leaves room for the inspector beside it */
+  }
+
+  /* phones */
+  @media screen and (max-width:640px){
+    .wrap{padding:16px 12px 48px}
+    .card{padding:16px 12px;border-radius:12px}
+    header h1{font-size:24px}
+    select{max-width:100%}
+    label.fld{flex-wrap:wrap;max-width:100%}
+    label.fld select{min-width:0}
+    .tabbar button{padding:10px 6px;font-size:14.5px}
+    table.dataT th, table.dataT td{padding:6px 8px}
+    table.dataT th{white-space:normal;line-height:1.25}
+    table.dataT input{width:64px}
+    table.dataT input.nm{width:96px}
+    .inspector{flex:1 1 100%}
+    .explain, .practice, .okNote{padding:12px 14px}
+  }
+
+  @media print{
+    body{background:#fff}
+    .wrap{max-width:none;padding:0}
+    .noprint{display:none !important}
+    .card{box-shadow:none;border-color:#ccc;break-inside:avoid;page-break-inside:avoid}
+    .tabbar{display:none}
+    header h1{font-size:22px}
+    table.dataT input{border-color:transparent;background:transparent;color:var(--ink)}
+    table.dataT th,table.dataT td{border-color:#bbb}
+  }
+
+  #testOut{font-family:Consolas,"Courier New",monospace;font-size:13.5px;white-space:pre-wrap}
+  #testOut .p{color:var(--ok)} #testOut .f{color:var(--bad);font-weight:700}
+  #testOut h3{font-family:"Segoe UI",sans-serif;margin:16px 0 6px;font-size:16px}
+  .tally{font-size:18px;font-weight:800;padding:10px 16px;border-radius:10px;margin:12px 0}
+  .tally.ok{background:var(--ok-soft);color:var(--ok);border:1px solid #bbf7d0}
+  .tally.bad{background:var(--bad-soft);color:var(--bad);border:1px solid #fecaca}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Decision Theory</h1>
+    <p class="sub">Payoff tables · Decision trees · IES 303 Lecture 05</p>
+  </header>
+  <div id="app">
+    <nav class="tabbar noprint" id="tabbar"></nav>
+    <section class="card noprint" id="modeCard">
+      <div class="row">
+        <span class="seg" id="segMode">
+          <button data-v="guided" class="on">Guided — tool explains</button>
+          <button data-v="practice">Practice — you answer first</button>
+        </span>
+        <button id="btnPrint">🖨 Print</button>
+      </div>
+    </section>
+    <section class="card" id="setupCard"><div id="setupBody"></div></section>
+    <section class="card hidden" id="workCard"><div id="workBody"></div></section>
+  </div>
+  <section class="card hidden" id="testCard" style="display:none">
+    <h2>Acceptance tests</h2><div id="testOut"></div>
+  </section>
+</div>
+
+<script id="solverScript">
+/* =====================================================================
+   PURE LOGIC — no DOM access. Extracted and unit-tested in Node.
+   Objective is profit / maximize throughout (spec section 2).
+   ===================================================================== */
+
+var EPS = 1e-9;
+function near(a, b, tol){ return Math.abs(a - b) <= (tol == null ? 1e-9 : tol); }
+
+/* ---------------------------------------------------------------
+   MODE A — payoff table
+   P : number[alternatives][states]
+   probs : number[states] | null   (null = decision under uncertainty)
+   --------------------------------------------------------------- */
+
+/* Every index achieving the best value, not just the first — ties are
+   pedagogically load-bearing here (spec section 3.4). */
+function argAll(values, want){
+  var best = values[0], i;
+  for(i = 1; i < values.length; i++){
+    if(want === 'max' ? values[i] > best : values[i] < best) best = values[i];
+  }
+  var winners = [];
+  for(i = 0; i < values.length; i++) if(near(values[i], best, 1e-9)) winners.push(i);
+  return { best: best, winners: winners };
+}
+
+function rowMins(P){ return P.map(function(r){ return Math.min.apply(null, r); }); }
+function rowMaxs(P){ return P.map(function(r){ return Math.max.apply(null, r); }); }
+function rowMeans(P){
+  return P.map(function(r){
+    var s = 0;
+    for(var j = 0; j < r.length; j++) s += r[j];
+    return s / r.length;
+  });
+}
+function colMaxs(P){
+  var out = [], j, i;
+  for(j = 0; j < P[0].length; j++){
+    var m = P[0][j];
+    for(i = 1; i < P.length; i++) if(P[i][j] > m) m = P[i][j];
+    out.push(m);
+  }
+  return out;
+}
+
+/* Regret is a non-negative shortfall against the best that state allowed. */
+function regretTable(P){
+  var cm = colMaxs(P);
+  return P.map(function(r){ return r.map(function(v, j){ return cm[j] - v; }); });
+}
+
+function emvs(P, probs){
+  return P.map(function(r){
+    var s = 0;
+    for(var j = 0; j < r.length; j++) s += probs[j] * r[j];
+    return s;
+  });
+}
+
+/* The deck's "expected payoff under certainty" — what perfect information buys. */
+function payoffUnderCertainty(P, probs){
+  var cm = colMaxs(P), s = 0;
+  for(var j = 0; j < cm.length; j++) s += probs[j] * cm[j];
+  return s;
+}
+
+function analysePayoff(P, probs){
+  var mins = rowMins(P), maxs = rowMaxs(P), means = rowMeans(P);
+  var R = regretTable(P);
+  var regretRowMax = R.map(function(r){ return Math.max.apply(null, r); });
+
+  var out = {
+    rowMin: mins, rowMax: maxs, rowMean: means, colMax: colMaxs(P),
+    regret: R, regretRowMax: regretRowMax,
+    maximin: argAll(mins, 'max'),
+    maximax: argAll(maxs, 'max'),
+    laplace: argAll(means, 'max'),
+    minimaxRegret: argAll(regretRowMax, 'min')
+  };
+  if(probs){
+    out.emv = emvs(P, probs);
+    out.emvPick = argAll(out.emv, 'max');
+    out.certainty = payoffUnderCertainty(P, probs);
+    out.evpi = out.certainty - out.emvPick.best;
+  }
+  return out;
+}
+
+/* Do the criteria disagree? That disagreement is the lesson (spec 3.5). */
+function criteriaAgree(a){
+  var picks = [a.maximin.winners, a.maximax.winners, a.laplace.winners, a.minimaxRegret.winners];
+  if(a.emvPick) picks.push(a.emvPick.winners);
+  var common = picks[0].slice(), i, k;
+  for(i = 1; i < picks.length; i++){
+    var next = [];
+    for(k = 0; k < common.length; k++) if(picks[i].indexOf(common[k]) > -1) next.push(common[k]);
+    common = next;
+  }
+  return common;
+}
+
+function validatePayoff(P, probs, altNames, stateNames){
+  var errs = [], i, j;
+  if(!P.length || P.length < 2) errs.push('At least 2 alternatives are needed.');
+  if(!P.length || !P[0].length || P[0].length < 2) errs.push('At least 2 states of nature are needed.');
+  for(i = 0; i < P.length; i++)
+    for(j = 0; j < P[i].length; j++)
+      if(P[i][j] == null || isNaN(P[i][j]))
+        errs.push('Payoff for ' + (altNames ? altNames[i] : 'row ' + (i + 1)) +
+                  ' under ' + (stateNames ? stateNames[j] : 'state ' + (j + 1)) + ' is blank.');
+  if(probs){
+    var s = 0;
+    for(j = 0; j < probs.length; j++){
+      if(probs[j] == null || isNaN(probs[j])) { errs.push('Probability for state ' + (j + 1) + ' is blank.'); s = NaN; break; }
+      if(probs[j] < 0) errs.push('Probabilities cannot be negative.');
+      s += probs[j];
+    }
+    if(!isNaN(s) && !near(s, 1, 0.001))
+      errs.push('Probabilities add up to ' + (Math.round(s * 1000) / 1000) + ', not 1.');
+  }
+  return errs;
+}
+
+/* ---------------------------------------------------------------
+   Payoff tables from the lecture deck. Kept here rather than in the UI so the
+   acceptance suite can check them against the answers the slides give.
+   Slide numbers refer to "05 Decision Theory.pptx" (41 slides).
+   --------------------------------------------------------------- */
+var TABLE_PRESETS = {
+  facility: {
+    name: 'Facility sizing — the running example (slides 5, 10–13, 20–21, 36–38)',
+    alts: ['Small facility', 'Medium facility', 'Large facility'],
+    states: ['Low', 'Medium', 'High'],
+    P: [[10, 10, 10], [7, 12, 12], [-4, 2, 16]],
+    probs: [0.3, 0.5, 0.2],
+    note: 'Payoffs in $ millions. Every criterion is worked on this table in the deck: ' +
+          'Maximin picks Small, Maximax picks Large, Laplace and Minimax regret both pick Medium, ' +
+          'and EMV picks Medium at 10.5 with EVPI = 1.7. A good first example precisely because they disagree.'
+  },
+  uncertainty: {
+    name: 'Exercise — decision under uncertainty (slides 14–16)',
+    alts: ['Cloud', 'Mobile', 'Hardware'],
+    states: ['Expanding market', 'Stable market', 'Contracting market'],
+    P: [[80, 50, 20], [100, 40, 10], [60, 60, 30]],
+    probs: null,
+    note: 'No probabilities, so only the four uncertainty criteria apply. ' +
+          'Two ties to talk about: all three alternatives average 50, so <b>Laplace ties three ways</b>, ' +
+          'and Cloud and Mobile both peak at 20 regret, so <b>Minimax regret ties</b> as well.'
+  },
+  assignment: {
+    name: 'Individual Assignment 1 (slides 17–19)',
+    alts: ['Economy EV', 'Luxury EV', 'Crossover EV'],
+    states: ['Mass-market', 'Premium market', 'Saturated market'],
+    P: [[200, 120, 30], [90, 300, -40], [160, 210, 50]],
+    probs: null,
+    note: 'Maximin and Laplace and Minimax regret all pick Crossover; Maximax picks Luxury. ' +
+          'Economy and Luxury tie on the average at 116.67, but Crossover beats both at 140.'
+  },
+  risk: {
+    name: 'Exercise — decision under risk (slides 22–23)',
+    alts: ['Build EV Factory', 'Partner w/ Brand', 'Do Nothing'],
+    states: ['Boom', 'Stagnate', 'Crash'],
+    P: [[500, 200, -300], [300, 150, -50], [0, 0, 0]],
+    probs: [0.4, 0.4, 0.2],
+    note: 'Straight EMV practice: 220 / 170 / 0, so Build EV Factory wins. ' +
+          'Note that Maximin would pick Do Nothing — worth asking the class which they would defend.'
+  },
+  evpi: {
+    name: 'EVPI exercise (slides 39–40)',
+    alts: ['Economy EV', 'Luxury EV', 'Crossover EV'],
+    states: ['Mass-market', 'Premium market', 'Saturated market'],
+    P: [[200, 120, 30], [90, 300, -40], [160, 210, 50]],
+    probs: [0.5, 0.35, 0.15],
+    note: 'The same payoffs as Assignment 1, now with probabilities attached. ' +
+          'EMV 146.5 / 144 / 161 picks Crossover; the expected payoff under certainty is 212.5, ' +
+          'so EVPI = 51.5.'
+  }
+};
+
+/* ---------------------------------------------------------------
+   Generating a payoff table that is worth discussing.
+
+   Uniform random numbers make poor teaching problems: one alternative
+   usually dominates the rest, and every criterion then picks it, which is
+   exactly the case the lesson is not about. These rules build the structure
+   a real payoff table has:
+
+     1. States run worst to best, so every row is non-decreasing across them.
+     2. Alternatives run conservative to aggressive: the first row is nearly
+        flat, the last swings widest and carries the downside.
+     3. No alternative may be dominated - weakly worse everywhere and strictly
+        worse somewhere - because a student would simply strike it out.
+     4. The criteria must not all agree, or there is nothing to discuss.
+     5. Payoffs are multiples of 5; probabilities are multiples of 0.05,
+        never zero, and add to exactly 1.
+   --------------------------------------------------------------- */
+
+function isDominated(P, i){
+  for(var k = 0; k < P.length; k++){
+    if(k === i) continue;
+    var weaklyWorse = true, strictlyWorse = false;
+    for(var j = 0; j < P[i].length; j++){
+      if(P[i][j] > P[k][j]) { weaklyWorse = false; break; }
+      if(P[i][j] < P[k][j]) strictlyWorse = true;
+    }
+    if(weaklyWorse && strictlyWorse) return true;
+  }
+  return false;
+}
+
+/* Probabilities in twentieths, humped toward the middle states. */
+function randomProbabilities(S, rand){
+  rand = rand || Math.random;
+  var w = [], tot = 0, j;
+  for(j = 0; j < S; j++){
+    var pos = S === 1 ? 0.5 : j / (S - 1);
+    var hump = 1 - Math.abs(pos - 0.5) * 1.1;
+    w.push(Math.max(0.15, hump) * (0.75 + rand() * 0.5));
+    tot += w[j];
+  }
+  var units = [], used = 0;
+  for(j = 0; j < S; j++){ units.push(Math.max(1, Math.round(w[j] / tot * 20))); used += units[j]; }
+  /* nudge the largest entries until the units add to exactly 20 */
+  var guard = 0;
+  while(used !== 20 && guard++ < 100){
+    var bestIdx = 0;
+    for(j = 1; j < S; j++)
+      if(used > 20 ? units[j] > units[bestIdx] : units[j] < units[bestIdx]) bestIdx = j;
+    if(used > 20){ if(units[bestIdx] > 1){ units[bestIdx]--; used--; } else break; }
+    else { units[bestIdx]++; used++; }
+  }
+  return units.map(function(u){ return Math.round(u / 20 * 100) / 100; });
+}
+
+function randomPayoffTable(A, S, rand){
+  rand = rand || Math.random;
+  var best = null, attempt, i, j;
+  for(attempt = 0; attempt < 400; attempt++){
+    var base = 40 + Math.round(rand() * 8) * 10;
+    var P = [];
+    for(i = 0; i < A; i++){
+      var t = A < 2 ? 0 : i / (A - 1);          /* 0 = conservative, 1 = aggressive */
+      var spread = 20 + 170 * t;
+      var mid = base + 15 * t;                  /* a little risk premium for the bold */
+      var row = [];
+      for(j = 0; j < S; j++){
+        var pos = S < 2 ? 0 : j / (S - 1) - 0.5;
+        var v = mid + pos * spread + (rand() - 0.5) * spread * 0.16;
+        row.push(Math.round(v / 5) * 5);
+      }
+      row.sort(function(x, y){ return x - y; });  /* a better state never pays less */
+      P.push(row);
+    }
+    /* Shuffle the rows. Built in order, the safe alternative is always first and
+       the bold one always last, so Maximin and Maximax would always name the same
+       positions and students would learn the layout instead of the criterion.
+       Row order does not affect monotonicity or dominance. */
+    for(i = P.length - 1; i > 0; i--){
+      var swap = Math.floor(rand() * (i + 1)), tmp = P[i];
+      P[i] = P[swap]; P[swap] = tmp;
+    }
+    var domFree = true;
+    for(i = 0; i < A; i++) if(isDominated(P, i)) { domFree = false; break; }
+    if(!domFree) continue;
+
+    var probs = randomProbabilities(S, rand);
+    var a = analysePayoff(P, probs);
+    var seen = {}, distinct = 0, lists = [a.maximin, a.maximax, a.laplace, a.minimaxRegret, a.emvPick];
+    for(i = 0; i < lists.length; i++)
+      for(j = 0; j < lists[i].winners.length; j++)
+        if(!seen[lists[i].winners[j]]) { seen[lists[i].winners[j]] = 1; distinct++; }
+    if(!best) best = { P:P, probs:probs, distinct:distinct };
+    if(distinct > best.distinct) best = { P:P, probs:probs, distinct:distinct };
+    if(distinct >= 2) return { P:P, probs:probs };
+  }
+  return { P:best.P, probs:best.probs };
+}
+
+/* ---------------------------------------------------------------
+   MODE B — decision tree
+
+   node = { type:'decision'|'chance'|'leaf', label,
+            children:[ {label, prob?, node, cut?} ],   prob only under chance
+            payoff }                                    leaf only
+   Decision nodes may carry `baseline`: the index of the "no action" branch,
+   used for the value-of-the-option readout (spec 4.4).
+   --------------------------------------------------------------- */
+
+function tLeaf(payoff, label){ return { type:'leaf', payoff:payoff, label:label || '' }; }
+function tChance(children, label){ return { type:'chance', label:label || '', children:children }; }
+function tDecision(children, label, baseline){
+  var n = { type:'decision', label:label || '', children:children };
+  if(baseline != null) n.baseline = baseline;
+  return n;
+}
+function tBranch(label, node, prob){
+  var c = { label:label, node:node };
+  if(prob != null) c.prob = prob;
+  return c;
+}
+
+/* Fold back right to left. Annotates every node with `value`; decision nodes
+   also get `chosen` (all tied winners) and mark rejected children `cut`. */
+function foldBack(node){
+  var i, vals;
+  if(node.type === 'leaf'){ node.value = node.payoff; return node.value; }
+  vals = [];
+  for(i = 0; i < node.children.length; i++) vals.push(foldBack(node.children[i].node));
+  if(node.type === 'chance'){
+    var s = 0;
+    for(i = 0; i < node.children.length; i++) s += node.children[i].prob * vals[i];
+    node.value = s;
+    for(i = 0; i < node.children.length; i++) node.children[i].cut = false;
+  } else {
+    var pick = argAll(vals, 'max');
+    node.value = pick.best;
+    node.chosen = pick.winners;
+    for(i = 0; i < node.children.length; i++)
+      node.children[i].cut = pick.winners.indexOf(i) === -1;
+  }
+  return node.value;
+}
+
+/* Post-order list of the nodes that need working out, so the UI can step
+   through them right to left exactly as the fold-back proceeds. */
+function foldOrder(node, out){
+  out = out || [];
+  if(node.type === 'leaf') return out;
+  for(var i = 0; i < node.children.length; i++) foldOrder(node.children[i].node, out);
+  out.push(node);
+  return out;
+}
+
+function treeDepth(node){
+  if(node.type === 'leaf') return 0;
+  var m = 0;
+  for(var i = 0; i < node.children.length; i++) m = Math.max(m, treeDepth(node.children[i].node));
+  return 1 + m;
+}
+function hasDecisionBelow(node){
+  if(node.type === 'leaf') return false;
+  for(var i = 0; i < node.children.length; i++){
+    var c = node.children[i].node;
+    if(c.type === 'decision') return true;
+    if(hasDecisionBelow(c)) return true;
+  }
+  return false;
+}
+
+/* Value of a branch if every later decision were frozen to its baseline
+   ("no action") option — the deck's 212 on slide 29. */
+function valueAtBaseline(node){
+  var i, s;
+  if(node.type === 'leaf') return node.payoff;
+  if(node.type === 'chance'){
+    s = 0;
+    for(i = 0; i < node.children.length; i++) s += node.children[i].prob * valueAtBaseline(node.children[i].node);
+    return s;
+  }
+  var b = node.baseline != null ? node.baseline : 0;
+  return valueAtBaseline(node.children[b].node);
+}
+
+/* What the second-stage flexibility is worth, for the alternative the root
+   actually picks. Slide 29: 308 - 212 = 96. Null when the chosen branch has
+   no later decision to be flexible about. */
+function optionValue(root){
+  if(root.type !== 'decision' || !root.chosen || !root.chosen.length) return null;
+  var idx = root.chosen[0], branch = root.children[idx].node;
+  if(!hasDecisionBelow(branch) && branch.type !== 'decision') return null;
+  var withOption = branch.value, without = valueAtBaseline(branch);
+  return { alternative: root.children[idx].label, withOption: withOption,
+           without: without, value: withOption - without };
+}
+
+function validateTree(node, errs, path){
+  errs = errs || []; path = path || 'the root';
+  if(node.type === 'leaf'){
+    if(node.payoff == null || isNaN(node.payoff)) errs.push('A payoff is missing at ' + path + '.');
+    return errs;
+  }
+  if(!node.children || node.children.length < 2)
+    errs.push(path + ' has fewer than 2 branches.');
+  if(node.type === 'chance'){
+    var s = 0, ok = true, i;
+    for(i = 0; i < node.children.length; i++){
+      var p = node.children[i].prob;
+      if(p == null || isNaN(p)){ errs.push('A probability is missing at ' + path + '.'); ok = false; break; }
+      s += p;
+    }
+    if(ok && !near(s, 1, 0.001))
+      errs.push('Probabilities at ' + path + ' add up to ' + (Math.round(s * 1000) / 1000) + ', not 1.');
+  }
+  for(var k = 0; k < (node.children || []).length; k++)
+    validateTree(node.children[k].node, errs, '"' + node.children[k].label + '"');
+  return errs;
+}
+
+/* A payoff table with probabilities is the same information as a one-stage
+   tree — slide 24 says so outright. Used by the "draw this as a tree" bridge. */
+function tableToTree(P, probs, altNames, stateNames){
+  var kids = [];
+  for(var i = 0; i < P.length; i++){
+    var states = [];
+    for(var j = 0; j < P[i].length; j++)
+      states.push(tBranch(stateNames[j], tLeaf(P[i][j]), probs[j]));
+    kids.push(tBranch(altNames[i], tChance(states)));
+  }
+  return tDecision(kids, 'Decision');
+}
+</script>
+
+<script id="testScript">
+/* =====================================================================
+   ACCEPTANCE TESTS — spec section 6, all taken from the lecture deck.
+   Runs in Node and in the page via ?test / #test.
+   ===================================================================== */
+
+function runAcceptanceTests(){
+  var out = [], pass = 0, fail = 0;
+  function group(n){ out.push({ group:n }); }
+  function ok(name, cond, got, want){
+    if(cond){ pass++; out.push({ ok:true, name:name, got:got }); }
+    else { fail++; out.push({ ok:false, name:name, got:got, want:want }); }
+  }
+  function eq(name, got, want, tol){ ok(name, near(got, want, tol == null ? 1e-9 : tol), got, want); }
+  function eqs(name, got, want){ ok(name, got === want, got, want); }
+  function names(winners, labels){ return winners.map(function(i){ return labels[i]; }).join(' & '); }
+
+  /* ---------- 6.1 Facility sizing ---------- */
+  group('6.1 Facility sizing — the running lecture example (slides 5, 10-13, 20-21, 36-38)');
+  var FA = ['Small', 'Medium', 'Large'];
+  var FP = [[10, 10, 10], [7, 12, 12], [-4, 2, 16]];
+  var Fp = [0.3, 0.5, 0.2];
+  var fa = analysePayoff(FP, Fp);
+  eqs('row minima', fa.rowMin.join(','), '10,7,-4');
+  eqs('Maximin', names(fa.maximin.winners, FA), 'Small');
+  eqs('row maxima', fa.rowMax.join(','), '10,12,16');
+  eqs('Maximax', names(fa.maximax.winners, FA), 'Large');
+  eqs('Laplace averages', fa.rowMean.map(function(v){ return v.toFixed(2); }).join(','), '10.00,10.33,4.67');
+  eqs('Laplace', names(fa.laplace.winners, FA), 'Medium');
+  eqs('regret table', fa.regret.map(function(r){ return r.join(','); }).join(' / '), '0,2,6 / 3,0,4 / 14,10,0');
+  eqs('regret row maxima', fa.regretRowMax.join(','), '6,4,14');
+  eqs('Minimax regret', names(fa.minimaxRegret.winners, FA), 'Medium');
+  eqs('EMV', fa.emv.map(function(v){ return +v.toFixed(2); }).join(','), '10,10.5,3');
+  eqs('EMV pick', names(fa.emvPick.winners, FA), 'Medium');
+  eq ('expected payoff under certainty', fa.certainty, 12.2, 5e-9);
+  eq ('EVPI', fa.evpi, 1.7, 5e-9);
+
+  /* ---------- 6.2 Exercise, uncertainty ---------- */
+  group('6.2 Exercise — decision under uncertainty (slides 14-16)');
+  var EA = ['Cloud', 'Mobile', 'Hardware'];
+  var EP = [[80, 50, 20], [100, 40, 10], [60, 60, 30]];
+  var ea = analysePayoff(EP, null);
+  eqs('Maximax', names(ea.maximax.winners, EA), 'Mobile');
+  eqs('Maximin', names(ea.maximin.winners, EA), 'Hardware');
+  eqs('Laplace averages', ea.rowMean.join(','), '50,50,50');
+  eqs('Laplace is a three-way tie', names(ea.laplace.winners, EA), 'Cloud & Mobile & Hardware');
+  eqs('regret table', ea.regret.map(function(r){ return r.join(','); }).join(' / '), '20,10,10 / 0,20,20 / 40,0,0');
+  eqs('regret row maxima', ea.regretRowMax.join(','), '20,20,40');
+  eqs('Minimax regret is a tie', names(ea.minimaxRegret.winners, EA), 'Cloud & Mobile');
+
+  /* ---------- 6.3 Individual Assignment 1 ---------- */
+  group('6.3 Individual Assignment 1 (slides 17-19)');
+  var AA = ['Economy', 'Luxury', 'Crossover'];
+  var AP = [[200, 120, 30], [90, 300, -40], [160, 210, 50]];
+  var aa = analysePayoff(AP, null);
+  eqs('Maximin', names(aa.maximin.winners, AA), 'Crossover');
+  eqs('Maximax', names(aa.maximax.winners, AA), 'Luxury');
+  eqs('Laplace averages', aa.rowMean.map(function(v){ return v.toFixed(2); }).join(','), '116.67,116.67,140.00');
+  eqs('Laplace', names(aa.laplace.winners, AA), 'Crossover');
+  eqs('Economy and Luxury tie on average', near(aa.rowMean[0], aa.rowMean[1]), true);
+  eqs('regret table', aa.regret.map(function(r){ return r.join(','); }).join(' / '), '0,180,20 / 110,0,90 / 40,90,0');
+  eqs('regret row maxima', aa.regretRowMax.join(','), '180,110,90');
+  eqs('Minimax regret', names(aa.minimaxRegret.winners, AA), 'Crossover');
+
+  /* ---------- 6.4 Exercise, risk ---------- */
+  group('6.4 Exercise — decision under risk (slides 22-23)');
+  var RA = ['Build EV Factory', 'Partner w/ Brand', 'Do Nothing'];
+  var RP = [[500, 200, -300], [300, 150, -50], [0, 0, 0]];
+  var ra = analysePayoff(RP, [0.4, 0.4, 0.2]);
+  eqs('EMV', ra.emv.map(function(v){ return +v.toFixed(2); }).join(','), '220,170,0');
+  eqs('EMV pick', names(ra.emvPick.winners, RA), 'Build EV Factory');
+
+  /* ---------- 6.5 EVPI exercise ---------- */
+  group('6.5 EVPI exercise (slides 39-40)');
+  var va = analysePayoff(AP, [0.5, 0.35, 0.15]);
+  eqs('EMV', va.emv.map(function(v){ return +v.toFixed(2); }).join(','), '146.5,144,161');
+  eqs('EMV pick', names(va.emvPick.winners, AA), 'Crossover');
+  eq ('expected payoff under certainty', va.certainty, 212.5, 5e-9);
+  eq ('EVPI', va.evpi, 51.5, 5e-9);
+
+  /* ---------- 6.6 Tree, facility sizing ---------- */
+  group('6.6 Tree — facility sizing, two-stage (slides 25-27)');
+  var t1 = tDecision([
+    tBranch('Build small', tChance([
+      tBranch('Low demand', tLeaf(40), 0.4),
+      tBranch('High demand', tDecision([
+        tBranch('Do nothing', tLeaf(40)),
+        tBranch('Overtime', tLeaf(50)),
+        tBranch('Expand', tLeaf(55))
+      ]), 0.6)
+    ])),
+    tBranch('Build large', tChance([
+      tBranch('Low demand', tDecision([
+        tBranch('Do nothing', tLeaf(-10)),
+        tBranch('Reduce price', tLeaf(50))
+      ]), 0.4),
+      tBranch('High demand', tLeaf(70), 0.6)
+    ]))
+  ], 'Facility');
+  eqs('tree validates', validateTree(t1).join('; ') || 'clean', 'clean');
+  foldBack(t1);
+  eq ('second stage under Build small', t1.children[0].node.children[1].node.value, 55);
+  eq ('Build small', t1.children[0].node.value, 49);
+  eq ('second stage under Build large', t1.children[1].node.children[0].node.value, 50);
+  eq ('Build large', t1.children[1].node.value, 62);
+  eq ('root value', t1.value, 62);
+  eqs('root picks', names(t1.chosen, ['Build small', 'Build large']), 'Build large');
+  eqs('rejected branch is cut', t1.children[0].cut + ',' + t1.children[1].cut, 'true,false');
+  eqs('two-stage tree is 3 levels deep', treeDepth(t1), 3);
+
+  /* ---------- 6.7 Tree, Smart Sensor Launch ---------- */
+  group('6.7 Tree — Smart Sensor Launch, two-stage (slides 28-29)');
+  /* baseline 1 = "Stay", the no-action branch the deck compares against */
+  var t2 = tDecision([
+    tBranch('Full Line', tChance([
+      tBranch('Strong', tLeaf(600), 0.4),
+      tBranch('Moderate', tLeaf(200), 0.4),
+      tBranch('Weak', tLeaf(-250), 0.2)
+    ])),
+    tBranch('Pilot Line', tChance([
+      tBranch('Strong', tDecision([tBranch('Expand', tLeaf(500)), tBranch('Stay', tLeaf(260))], '', 1), 0.4),
+      tBranch('Moderate', tDecision([tBranch('Expand', tLeaf(180)), tBranch('Stay', tLeaf(220))], '', 1), 0.4),
+      tBranch('Weak', tDecision([tBranch('Expand', tLeaf(-200)), tBranch('Stay', tLeaf(100))], '', 1), 0.2)
+    ])),
+    tBranch('Do nothing', tLeaf(0))
+  ], 'Smart Sensor');
+  eqs('tree validates', validateTree(t2).join('; ') || 'clean', 'clean');
+  foldBack(t2);
+  eq ('Full Line', t2.children[0].node.value, 270);
+  eq ('Pilot Line', t2.children[1].node.value, 308);
+  eq ('Do nothing', t2.children[2].node.value, 0);
+  eqs('second stage picks Expand / Stay / Stay',
+      [0, 1, 2].map(function(k){
+        var d = t2.children[1].node.children[k].node;
+        return d.children[d.chosen[0]].label;
+      }).join(','), 'Expand,Stay,Stay');
+  eq ('root value', t2.value, 308);
+  eqs('root picks', names(t2.chosen, ['Full Line', 'Pilot Line', 'Do nothing']), 'Pilot Line');
+  var ov = optionValue(t2);
+  eqs('option belongs to the chosen alternative', ov.alternative, 'Pilot Line');
+  eq ('value without the option to expand', ov.without, 212);
+  eq ('value of the option to expand', ov.value, 96);
+  eqs('a root branch may end at a leaf', t2.children[2].node.type, 'leaf');
+
+  /* ---------- table to tree bridge ---------- */
+  group('Mode A to Mode B bridge (slide 24)');
+  var bridged = tableToTree(FP, Fp, FA, ['Low', 'Medium', 'High']);
+  eqs('bridge validates', validateTree(bridged).join('; ') || 'clean', 'clean');
+  foldBack(bridged);
+  eqs('branch values equal the EMVs',
+      bridged.children.map(function(c){ return +c.node.value.toFixed(2); }).join(','),
+      fa.emv.map(function(v){ return +v.toFixed(2); }).join(','));
+  eqs('root picks the EMV winner', names(bridged.chosen, FA), names(fa.emvPick.winners, FA));
+  eqs('one-stage tree is 2 levels deep', treeDepth(bridged), 2);
+  eqs('no later decision, so no option value', optionValue(bridged), null);
+
+  /* ---------- the preset library must match the slides ---------- */
+  group('Presets reproduce the deck');
+  function presetPicks(key){
+    var p = TABLE_PRESETS[key], an = analysePayoff(p.P, p.probs);
+    function nm(r){ return r.winners.map(function(i){ return p.alts[i]; }).join(' & '); }
+    return { a:an, p:p, maximin:nm(an.maximin), maximax:nm(an.maximax),
+             laplace:nm(an.laplace), regret:nm(an.minimaxRegret),
+             emv:an.emvPick ? nm(an.emvPick) : null };
+  }
+  var pf = presetPicks('facility');
+  eqs('facility · Maximin', pf.maximin, 'Small facility');
+  eqs('facility · Maximax', pf.maximax, 'Large facility');
+  eqs('facility · Laplace', pf.laplace, 'Medium facility');
+  eqs('facility · Minimax regret', pf.regret, 'Medium facility');
+  eqs('facility · EMV', pf.emv, 'Medium facility');
+  eq ('facility · EVPI', pf.a.evpi, 1.7, 5e-9);
+  var pu = presetPicks('uncertainty');
+  eqs('uncertainty · Maximax', pu.maximax, 'Mobile');
+  eqs('uncertainty · Maximin', pu.maximin, 'Hardware');
+  eqs('uncertainty · Laplace ties three ways', pu.laplace, 'Cloud & Mobile & Hardware');
+  eqs('uncertainty · Minimax regret ties', pu.regret, 'Cloud & Mobile');
+  var pa = presetPicks('assignment');
+  eqs('assignment · Maximin', pa.maximin, 'Crossover EV');
+  eqs('assignment · Maximax', pa.maximax, 'Luxury EV');
+  eqs('assignment · Laplace', pa.laplace, 'Crossover EV');
+  eqs('assignment · Minimax regret', pa.regret, 'Crossover EV');
+  var pr = presetPicks('risk');
+  eqs('risk · EMV', pr.emv, 'Build EV Factory');
+  eqs('risk · EMV values', pr.a.emv.map(function(v){ return +v.toFixed(2); }).join(','), '220,170,0');
+  var pv = presetPicks('evpi');
+  eqs('EVPI exercise · EMV', pv.emv, 'Crossover EV');
+  eq ('EVPI exercise · payoff under certainty', pv.a.certainty, 212.5, 5e-9);
+  eq ('EVPI exercise · EVPI', pv.a.evpi, 51.5, 5e-9);
+  eqs('the EVPI exercise reuses the assignment payoffs',
+      JSON.stringify(TABLE_PRESETS.evpi.P), JSON.stringify(TABLE_PRESETS.assignment.P));
+  /* every preset must be well formed and consistently shaped */
+  var pk, pbad = 0;
+  for(pk in TABLE_PRESETS) if(TABLE_PRESETS.hasOwnProperty(pk)){
+    var pp = TABLE_PRESETS[pk];
+    if(validatePayoff(pp.P, pp.probs, pp.alts, pp.states).length) pbad++;
+    if(pp.P.length !== pp.alts.length) pbad++;
+    for(var pi = 0; pi < pp.P.length; pi++) if(pp.P[pi].length !== pp.states.length) pbad++;
+  }
+  eqs('every preset validates and is rectangular', pbad, 0);
+
+  /* ---------- generated problems ---------- */
+  group('Random problems obey the generator rules');
+  var gBad = { monotone:0, dominated:0, agree:0, grain:0, probs:0 }, gN = 0, gi, gj;
+  for(var g = 0; g < 300; g++){
+    var A2 = 2 + (g % 5), S2 = 2 + ((g >> 1) % 5);
+    var gen = randomPayoffTable(A2, S2);
+    gN++;
+    for(gi = 0; gi < A2; gi++){
+      for(gj = 1; gj < S2; gj++) if(gen.P[gi][gj] < gen.P[gi][gj - 1]) gBad.monotone++;
+      for(gj = 0; gj < S2; gj++) if(Math.abs(gen.P[gi][gj] % 5) > 1e-9) gBad.grain++;
+      if(isDominated(gen.P, gi)) gBad.dominated++;
+    }
+    var ga = analysePayoff(gen.P, gen.probs), gseen = {}, gd = 0;
+    [ga.maximin, ga.maximax, ga.laplace, ga.minimaxRegret, ga.emvPick].forEach(function(r){
+      r.winners.forEach(function(w){ if(!gseen[w]){ gseen[w] = 1; gd++; } });
+    });
+    if(gd < 2) gBad.agree++;
+    var psum = 0;
+    for(gj = 0; gj < S2; gj++){
+      psum += gen.probs[gj];
+      if(gen.probs[gj] < 0.049) gBad.probs++;
+      if(Math.abs(gen.probs[gj] * 100 % 5) > 1e-6) gBad.probs++;
+    }
+    if(!near(psum, 1, 1e-9)) gBad.probs++;
+  }
+  eqs(gN + ' tables: every row rises with the state', gBad.monotone, 0);
+  eqs(gN + ' tables: no alternative is dominated', gBad.dominated, 0);
+  eqs(gN + ' tables: the criteria never all agree', gBad.agree, 0);
+  eqs(gN + ' tables: payoffs are multiples of 5', gBad.grain, 0);
+  eqs(gN + ' tables: probabilities are clean twentieths summing to 1', gBad.probs, 0);
+  /* a real spread of risk appetites must be present, wherever the rows landed */
+  var spreadOk = 0, posCount = [0, 0, 0, 0];
+  for(g = 0; g < 200; g++){
+    var sh = randomPayoffTable(4, 4);
+    var sp = sh.P.map(function(r){ return r[3] - r[0]; });
+    if(Math.max.apply(null, sp) >= Math.min.apply(null, sp) * 2 + 20) spreadOk++;
+    posCount[analysePayoff(sh.P, sh.probs).maximin.winners[0]]++;
+  }
+  eqs('200 tables: the boldest alternative swings far wider than the safest', spreadOk, 200);
+  ok('Maximin does not always land on the same row',
+     posCount.filter(function(c){ return c > 0; }).length >= 3,
+     posCount.join('/'), 'spread across rows');
+
+  /* ---------- validation ---------- */
+  group('Validation');
+  eqs('probabilities that miss 1 are rejected',
+      validatePayoff(FP, [0.3, 0.5, 0.3], FA, ['a','b','c']).length > 0, true);
+  eqs('probabilities within 0.001 are accepted',
+      validatePayoff(FP, [0.3, 0.5, 0.2005], FA, ['a','b','c']).length, 0);
+  eqs('a blank payoff is caught',
+      validatePayoff([[1, 2], [3, NaN]], null, ['x','y'], ['a','b'])[0].indexOf('blank') > -1, true);
+  eqs('one alternative is rejected', validatePayoff([[1, 2]], null).length > 0, true);
+  eqs('a chance node that misses 1 is caught',
+      validateTree(tChance([tBranch('a', tLeaf(1), 0.5), tBranch('b', tLeaf(2), 0.4)])).length > 0, true);
+  eqs('a single-branch node is caught',
+      validateTree(tDecision([tBranch('only', tLeaf(1))])).length > 0, true);
+
+  /* ---------- ties and disagreement ---------- */
+  group('Ties and criterion disagreement');
+  eqs('facility criteria disagree', criteriaAgree(fa).length, 0);
+  eqs('uncertainty exercise criteria disagree', criteriaAgree(ea).length, 0);
+  var allSame = analysePayoff([[5, 5], [1, 1]], [0.5, 0.5]);
+  eqs('a dominated table agrees on one winner', criteriaAgree(allSame).join(','), '0');
+
+  return { pass:pass, fail:fail, lines:out };
+}
+</script>
+
+<script>
+/* =====================================================================
+   UI — shell, Mode A (payoff table), Mode B (decision tree)
+   ===================================================================== */
+
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function fmt(v){
+  if(v == null || isNaN(v)) return '';
+  var r = Math.round(v * 100) / 100;
+  return (Math.abs(r - Math.round(r)) < 1e-9) ? String(Math.round(r)) : r.toFixed(2);
+}
+function fx(v, n){ return v == null || isNaN(v) ? '–' : v.toFixed(n == null ? 2 : n); }
+/* Practice tolerance, spec section 5: 0.01 absolute or 0.5% relative, whichever is larger. */
+function answerOk(got, want){
+  if(got == null || isNaN(got)) return false;
+  return Math.abs(got - want) <= Math.max(0.01, Math.abs(want) * 0.005);
+}
+function listNames(idx, labels){
+  var n = idx.map(function(i){ return labels[i]; });
+  return n.length < 2 ? n[0] : n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1];
+}
+
+var STATE = {
+  tab: 'table', mode: 'guided',
+  /* Mode A */
+  alts: [], states: [], P: [], useProbs: true, probs: [], presetKey: 'facility',
+  step: -1, ans: {},
+  /* Mode B */
+  form: { alts:2, states:2, second:true, secondOpts:2 },
+  tree: null, order: [], tstep: -1, sel: null, tans: {},
+  banner: null, neutral: false
+};
+
+var TABS = [
+  { key:'table', label:'Payoff Table — Criteria', sub:'maximin · maximax · Laplace · regret · EMV · EVPI' },
+  { key:'tree',  label:'Decision Tree — Fold Back', sub:'build, prune and value the tree' }
+];
+
+/* ---------------- shell ---------------- */
+function renderTabBar(){
+  var h = '', i;
+  for(i = 0; i < TABS.length; i++)
+    h += '<button data-tab="' + TABS[i].key + '"' + (STATE.tab === TABS[i].key ? ' class="on"' : '') + '>' +
+         esc(TABS[i].label) + '<span class="tn">' + esc(TABS[i].sub) + '</span></button>';
+  $('tabbar').innerHTML = h;
+  var bs = $('tabbar').querySelectorAll('button');
+  for(i = 0; i < bs.length; i++) bs[i].addEventListener('click', function(){
+    STATE.tab = this.dataset.tab; STATE.banner = null;
+    renderTabBar(); renderAll();
+  });
+}
+function segWire(id, fn){
+  $(id).addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if(!b) return;
+    var k = $(id).children;
+    for(var i = 0; i < k.length; i++) k[i].className = k[i] === b ? 'on' : '';
+    fn(b.dataset.v);
+  });
+}
+function renderAll(){
+  /* each tab owns its own progress, so switching tabs must restore whichever
+     card that tab was last on rather than leaving the other tab's state showing */
+  var started = STATE.tab === 'table' ? STATE.step >= 0 : STATE.tstep >= 0;
+  $('setupCard').classList.toggle('hidden', started);
+  $('workCard').classList.toggle('hidden', !started);
+  if(STATE.tab === 'table'){ renderTableSetup(); renderTableWork(); }
+  else { renderTreeSetup(); renderTreeWork(); }
+}
+function bannerHTML(){
+  return STATE.banner ? '<div class="okNote' + (STATE.neutral ? ' neutral' : '') + '">' + STATE.banner + '</div>' : '';
+}
+
+/* =====================================================================
+   MODE A — payoff table
+   ===================================================================== */
+
+function applyTablePreset(key){
+  var p = TABLE_PRESETS[key];
+  if(!p) return;
+  STATE.presetKey = key;
+  STATE.alts = p.alts.slice();
+  STATE.states = p.states.slice();
+  STATE.P = p.P.map(function(r){ return r.slice(); });
+  STATE.useProbs = !!p.probs;
+  STATE.probs = p.probs ? p.probs.slice() : p.states.map(function(){ return 0; });
+  STATE.step = -1; STATE.ans = {};
+}
+/* Any edit means the table is no longer the preset it came from. */
+function markTableCustom(){ STATE.presetKey = 'custom'; }
+
+function defaultTable(){ applyTablePreset('facility'); }
+function randomTable(){
+  var r = randomPayoffTable(STATE.alts.length, STATE.states.length);
+  STATE.P = r.P;
+  STATE.probs = r.probs;
+  STATE.step = -1; STATE.ans = {};
+}
+function resizeTable(A, S){
+  var i, j;
+  while(STATE.alts.length < A){ STATE.alts.push('Alternative ' + 'ABCDEF'[STATE.alts.length]); STATE.P.push([]); }
+  STATE.alts.length = A; STATE.P.length = A;
+  while(STATE.states.length < S){ STATE.states.push('State ' + (STATE.states.length + 1)); STATE.probs.push(0); }
+  STATE.states.length = S; STATE.probs.length = S;
+  for(i = 0; i < A; i++){
+    if(!STATE.P[i]) STATE.P[i] = [];
+    for(j = 0; j < S; j++) if(STATE.P[i][j] == null) STATE.P[i][j] = 0;
+    STATE.P[i].length = S;
+  }
+  STATE.step = -1; STATE.ans = {};
+}
+
+function renderTableSetup(){
+  var i, j;
+  var pk;
+  var opts = '<optgroup label="Lecture examples">';
+  for(pk in TABLE_PRESETS) if(TABLE_PRESETS.hasOwnProperty(pk))
+    opts += '<option value="' + pk + '"' + (STATE.presetKey === pk ? ' selected' : '') + '>' +
+            esc(TABLE_PRESETS[pk].name) + '</option>';
+  opts += '</optgroup><optgroup label="Your own"><option value="custom"' +
+          (STATE.presetKey === 'custom' ? ' selected' : '') + '>Custom / edited</option></optgroup>';
+
+  var h = bannerHTML() + '<h2>The payoff table</h2>' +
+    '<div class="row noprint"><label class="fld">Example <select id="selPreset">' + opts + '</select></label></div>';
+  if(TABLE_PRESETS[STATE.presetKey])
+    h += '<div class="explain" style="font-size:14.5px">' + TABLE_PRESETS[STATE.presetKey].note + '</div>';
+  h += '<div class="row noprint">' +
+    '<label class="fld">Alternatives <select id="selA">' + sizeOpts(2, 6, STATE.alts.length) + '</select></label>' +
+    '<label class="fld">States of nature <select id="selS">' + sizeOpts(2, 6, STATE.states.length) + '</select></label>' +
+    '<label class="fld"><input type="checkbox" id="ckProb"' + (STATE.useProbs ? ' checked' : '') + '> probabilities are known</label>' +
+    '</div>';
+  h += '<p class="hint">' + (STATE.useProbs
+      ? 'Probabilities known — this is a decision <b>under risk</b>, so EMV and EVPI apply.'
+      : 'No probabilities — this is a decision <b>under uncertainty</b>. Only Maximin, Maximax, Laplace and Minimax regret apply.') +
+      ' Payoffs are profit, so every criterion maximises.</p>';
+
+  h += '<table class="dataT"><tr><th></th>';
+  for(j = 0; j < STATE.states.length; j++)
+    h += '<th><input class="nm" data-sn="' + j + '" value="' + esc(STATE.states[j]) + '"></th>';
+  h += '</tr>';
+  for(i = 0; i < STATE.alts.length; i++){
+    h += '<tr><td class="jb"><input class="nm" data-an="' + i + '" value="' + esc(STATE.alts[i]) + '"></td>';
+    for(j = 0; j < STATE.states.length; j++)
+      h += '<td><input type="number" step="any" data-i="' + i + '" data-j="' + j + '" value="' + fmt(STATE.P[i][j]) + '"></td>';
+    h += '</tr>';
+  }
+  if(STATE.useProbs){
+    var sum = 0;
+    for(j = 0; j < STATE.probs.length; j++) sum += (STATE.probs[j] || 0);
+    h += '<tr><td class="jb">Probability</td>';
+    for(j = 0; j < STATE.states.length; j++)
+      h += '<td><input type="number" step="any" min="0" data-p="' + j + '" value="' + fmt(STATE.probs[j]) + '"></td>';
+    h += '</tr>';
+    h += '<tr><td class="jb">Total</td><td colspan="' + STATE.states.length + '" style="text-align:left">' +
+         '<span class="probSum ' + (near(sum, 1, 0.001) ? 'ok' : 'bad') + '">' + fmt(sum) +
+         (near(sum, 1, 0.001) ? ' ✓' : ' — must be 1') + '</span></td></tr>';
+  }
+  h += '</table>';
+
+  var errs = validatePayoff(STATE.P, STATE.useProbs ? STATE.probs : null, STATE.alts, STATE.states);
+  if(errs.length){
+    h += '<ul class="errList">';
+    for(i = 0; i < Math.min(errs.length, 4); i++) h += '<li class="err">' + esc(errs[i]) + '</li>';
+    h += '</ul>';
+  }
+  h += '<div class="row noprint"><button id="btnRand">Random values</button>' +
+       '<button class="primary" id="btnStart"' + (errs.length ? ' disabled' : '') + '>Start ▶</button></div>';
+  var again = focusKey($('setupBody'));
+  $('setupBody').innerHTML = h;
+  wireTableSetup();
+  refocus($('setupBody'), again);
+}
+/* Typing a payoff or probability redraws the whole panel, which throws away the box
+   being typed in. Note which box had the cursor and put it back afterwards — otherwise
+   it loses focus after every keystroke, and on an iPad the keyboard closes. */
+function focusKey(root){
+  var a = document.activeElement;
+  if(!a || a.tagName !== 'INPUT' || !root.contains(a)) return null;
+  var sel = a.id ? '#' + a.id : 'input', keys = ['i', 'j', 'p', 'an', 'sn', 'bl', 'bp'];
+  if(!a.id)
+    for(var k = 0; k < keys.length; k++)
+      if(a.dataset[keys[k]] !== undefined) sel += '[data-' + keys[k] + '="' + a.dataset[keys[k]] + '"]';
+  return sel === 'input' ? null : { sel: sel, raw: a.value };
+}
+function refocus(root, keep){
+  var b = keep ? root.querySelector(keep.sel) : null;
+  if(!b) return;
+  b.focus();
+  /* restore exactly what was typed — the redraw writes "0" for "0.0", which would turn
+     the next keystroke of 0.05 into 05. Assigning the value also puts the caret at the end. */
+  b.value = ''; b.value = keep.raw;
+}
+/* a number box holding a half-typed value ("0.", "-") reads as empty: don't redraw on it */
+function halfTyped(t){ return t.validity && t.validity.badInput; }
+function sizeOpts(lo, hi, cur){
+  var h = '';
+  for(var v = lo; v <= hi; v++) h += '<option' + (v === cur ? ' selected' : '') + '>' + v + '</option>';
+  return h;
+}
+function wireTableSetup(){
+  /* #setupBody outlives every redraw: one delegated listener, installed once
+     (adding one per redraw made them multiply with every keystroke) */
+  if(!wireTableSetup.typing){
+    wireTableSetup.typing = true;
+    $('setupBody').addEventListener('input', function(e){
+      var t = e.target;
+      if(t.dataset.an !== undefined){ STATE.alts[+t.dataset.an] = t.value; markTableCustom(); }
+      else if(t.dataset.sn !== undefined){ STATE.states[+t.dataset.sn] = t.value; markTableCustom(); }
+      else if(halfTyped(t)) return;
+      else if(t.dataset.p !== undefined){ STATE.probs[+t.dataset.p] = parseFloat(t.value); markTableCustom(); renderTableSetup(); }
+      else if(t.dataset.i !== undefined){ STATE.P[+t.dataset.i][+t.dataset.j] = parseFloat(t.value); markTableCustom(); renderTableSetup(); }
+    });
+  }
+  $('selPreset').addEventListener('change', function(){
+    if(this.value !== 'custom'){ applyTablePreset(this.value); STATE.banner = null; renderAll(); }
+    else { markTableCustom(); renderTableSetup(); }
+  });
+  $('selA').addEventListener('change', function(){ resizeTable(+this.value, STATE.states.length); markTableCustom(); renderAll(); });
+  $('selS').addEventListener('change', function(){ resizeTable(STATE.alts.length, +this.value); markTableCustom(); renderAll(); });
+  $('ckProb').addEventListener('change', function(){ STATE.useProbs = this.checked; STATE.step = -1; markTableCustom(); renderAll(); });
+  $('btnRand').addEventListener('click', function(){ randomTable(); markTableCustom(); renderAll(); });
+  $('btnStart').addEventListener('click', function(){
+    STATE.step = 0; STATE.ans = {}; STATE.banner = null;
+    $('setupCard').classList.add('hidden'); $('workCard').classList.remove('hidden');
+    renderTableWork();
+  });
+}
+
+/* ---- the eight steps ---- */
+function tableSteps(){
+  var s = ['intro', 'maximin', 'maximax', 'laplace', 'regret'];
+  if(STATE.useProbs) s.push('emv', 'evpi');
+  s.push('summary');
+  return s;
+}
+/* Typed answers live in STATE, not in the DOM, because choosing an alternative
+   re-renders the table and would otherwise wipe whatever had been entered.
+   Once a step has been checked, the marks are recomputed from the stored values
+   so they survive a redraw too. */
+function savedAns(k){ var v = STATE.ans[k]; return v == null ? '' : v; }
+function markAttr(stepKey, storeKey, want){
+  if(!STATE.ans[stepKey + 'checked']) return '';
+  return answerOk(parseFloat(STATE.ans[storeKey]), want) ? ' class="good"' : ' class="badIn"';
+}
+
+/* Only the criterion steps put a question to the student. */
+function stepHasQuestion(key){
+  return ['maximin', 'maximax', 'laplace', 'regret', 'emv', 'evpi'].indexOf(key) > -1;
+}
+var CRIT_TITLE = {
+  intro:'The payoff table', maximin:'Maximin', maximax:'Maximax', laplace:'Laplace',
+  regret:'Minimax regret', emv:'Expected monetary value', evpi:'Expected value of perfect information',
+  summary:'All criteria side by side'
+};
+
+function renderTableWork(){
+  if(STATE.step < 0){ $('workCard').classList.add('hidden'); return; }
+  $('workCard').classList.remove('hidden');
+  var steps = tableSteps(), key = steps[STATE.step];
+  var a = analysePayoff(STATE.P, STATE.useProbs ? STATE.probs : null);
+  var practice = STATE.mode === 'practice';
+  /* the table and the summary ask nothing, so they must never gate Next */
+  var solved = !practice || !stepHasQuestion(key) || STATE.ans[key] === true;
+
+  var h = '<h2>' + esc(CRIT_TITLE[key]) + '</h2>' + bannerHTML();
+  h += '<div class="row noprint">' +
+       '<button id="tBack"' + (STATE.step === 0 ? ' disabled' : '') + '>◀ Back</button>' +
+       '<button class="primary" id="tNext"' + (STATE.step >= steps.length - 1 || !solved ? ' disabled' : '') + '>Next ▶</button>' +
+       '<button id="tRestart">↺ Restart</button>' +
+       '<button id="tEdit">✎ Edit problem</button>' +
+       '<span class="hint">Step ' + (STATE.step + 1) + ' of ' + steps.length + '</span></div>';
+
+  h += stepBodyHTML(key, a, practice, solved);
+  $('workBody').innerHTML = h;
+  wireTableWork(key, a, practice, solved);
+}
+
+function stepBodyHTML(key, a, practice, solved){
+  var h = '', i;
+  if(key === 'intro'){
+    h += '<div class="explain">Each row is an alternative, each column a state of nature the manager cannot control. ' +
+         (STATE.useProbs
+           ? 'Probabilities are known, so this is a decision <b>under risk</b> — EMV and EVPI are available on top of the four uncertainty criteria.'
+           : 'No probabilities are given, so this is a decision <b>under uncertainty</b> — the four criteria that follow each encode a different attitude to that ignorance.') +
+         '</div>';
+    h += payoffTableHTML(a, { });
+    return h;
+  }
+  if(key === 'summary') return summaryHTML(a);
+
+  /* criterion steps */
+  var cfg = {
+    maximin: { vals:a.rowMin, pick:a.maximin, col:'Row minimum', want:'min',
+               why:'Maximin is the pessimist: assume the worst state happens, then take the best of those worst cases.' },
+    maximax: { vals:a.rowMax, pick:a.maximax, col:'Row maximum', want:'max',
+               why:'Maximax is the optimist: assume the best state happens, then take the best of those best cases.' },
+    laplace: { vals:a.rowMean, pick:a.laplace, col:'Average', want:'mean',
+               why:'Laplace treats the <b>states</b> as equally likely, so each row is judged by its plain average.' },
+    /* col is blank: the worst-regret column belongs to the regret table below,
+       not beside the payoffs, or it would appear twice */
+    regret:  { vals:a.regretRowMax, pick:a.minimaxRegret, col:'', want:'regret',
+               why:'Regret is what you give up by not having chosen the best alternative for the state that occurred. Minimise the worst of them.' },
+    emv:     { vals:a.emv, pick:a.emvPick, col:'EMV', want:'emv',
+               why:'With probabilities known, weight each payoff by how likely its state is.' },
+    evpi:    { vals:null, pick:null, col:'', want:'evpi',
+               why:'Perfect information would let you pick the best alternative for whichever state turns out to be true.' }
+  }[key];
+
+  h += '<div class="explain">' + cfg.why + '</div>';
+
+  if(key === 'evpi') return h + evpiHTML(a, practice, solved);
+
+  if(practice && !solved) h += practicePanel(key, cfg);
+
+  h += payoffTableHTML(a, { key:key, cfg:cfg, practice:practice, solved:solved });
+
+  if(key === 'regret') h += regretTableHTML(a, practice, solved);
+
+  if(solved){
+    h += '<div class="explain"><b>' + CRIT_TITLE[key] + '</b> chooses <b>' +
+         esc(listNames(cfg.pick.winners, STATE.alts)) + '</b>' +
+         (cfg.pick.winners.length > 1 ? ' — a <b>tie</b>, and the tool reports every alternative that ties.' : '') +
+         ' at ' + fmt(cfg.pick.best) + '.</div>';
+  }
+  return h;
+}
+
+/* the payoff grid, dimmed outside the cells in play */
+function payoffTableHTML(a, o){
+  var key = o.key, cfg = o.cfg, i, j, h = '<table class="dataT"><tr><th></th>';
+  for(j = 0; j < STATE.states.length; j++)
+    h += '<th' + (key === 'regret' ? '' : '') + '>' + esc(STATE.states[j]) +
+         (STATE.useProbs ? '<br><span style="font-weight:400">p = ' + fmt(STATE.probs[j]) + '</span>' : '') + '</th>';
+  if(cfg && cfg.col) h += '<th>' + esc(cfg.col) + '</th>';
+  h += '</tr>';
+
+  var marks = {};   /* cells the criterion looks at */
+  if(cfg){
+    for(i = 0; i < STATE.P.length; i++){
+      if(cfg.want === 'min' || cfg.want === 'max'){
+        var target = cfg.want === 'min' ? a.rowMin[i] : a.rowMax[i];
+        for(j = 0; j < STATE.P[i].length; j++) if(near(STATE.P[i][j], target)) { marks[i + ',' + j] = true; break; }
+      }
+    }
+  }
+  var winners = cfg && (!o.practice || o.solved) ? cfg.pick.winners : [];
+
+  var answering = o.practice && !o.solved && cfg;
+  var pickedRow = answering ? STATE.ans[key + 'row'] : null;
+
+  for(i = 0; i < STATE.alts.length; i++){
+    var isWin = winners.indexOf(i) > -1;
+    var isPicked = pickedRow === i;
+    var trCls = (isWin ? 'win ' : '') + (isPicked ? 'picked' : '');
+    h += '<tr class="' + trCls.trim() + '">';
+    h += '<td class="jb' + (answering ? ' selectable' : '') + '" data-row="' + i + '">' + esc(STATE.alts[i]) +
+         (isPicked ? '<span class="tick">✓ chosen</span>' : '') + '</td>';
+    for(j = 0; j < STATE.states.length; j++){
+      var cls = [];
+      if(answering && (cfg.want === 'min' || cfg.want === 'max')){
+        cls.push('pick');
+        if(STATE.ans[key + 'cell' + i] === j) cls.push('chosen');
+      } else if(marks[i + ',' + j] && o.solved) cls.push('mark');
+      else if(cfg && cfg.want !== 'mean' && cfg.want !== 'emv' && !marks[i + ',' + j] && o.solved) cls.push('dim');
+      h += '<td class="' + cls.join(' ') + '" data-cell="' + i + ',' + j + '">' + fmt(STATE.P[i][j]) + '</td>';
+    }
+    if(cfg && cfg.col){
+      if(answering && (cfg.want === 'mean' || cfg.want === 'emv'))
+        h += '<td><input type="number" step="any" data-val="' + i + '" value="' +
+             savedAns(key + 'val' + i) + '"' + markAttr(key, key + 'val' + i, cfg.vals[i]) + '></td>';
+      else if(answering && (cfg.want === 'min' || cfg.want === 'max')){
+        /* echo the cell the student marked, so the column fills in as they work */
+        var chosenJ = STATE.ans[key + 'cell' + i];
+        h += '<td class="' + (chosenJ == null ? '' : 'echo') + '">' +
+             (chosenJ == null ? '' : fmt(STATE.P[i][chosenJ])) + '</td>';
+      }
+      else if(o.solved || !o.practice)
+        h += '<td class="' + (isWin ? 'good' : '') + '">' + (cfg.vals ? fmt(cfg.vals[i]) : '') + '</td>';
+      else h += '<td></td>';
+    }
+    h += '</tr>';
+  }
+  h += '</table>';
+
+  if(answering) h += pickStateHTML(key, cfg);
+  return h;
+}
+
+/* A running summary of what the student has selected so far, so nothing about
+   the current answer is invisible. */
+function pickStateHTML(key, cfg){
+  var i, marked = 0, needCells = (cfg.want === 'min' || cfg.want === 'max');
+  for(i = 0; i < STATE.alts.length; i++) if(STATE.ans[key + 'cell' + i] != null) marked++;
+  var row = STATE.ans[key + 'row'];
+  var bits = [];
+  if(needCells)
+    bits.push((cfg.want === 'min' ? 'Row minima' : 'Row maxima') + ' marked: <b>' + marked +
+              ' of ' + STATE.alts.length + '</b>');
+  bits.push(row == null ? 'No alternative chosen yet — click one of the names on the left'
+                        : 'Alternative chosen: <b>' + esc(STATE.alts[row]) + '</b>');
+  return '<p class="pickState">' + bits.join(' · ') + '</p>';
+}
+
+function regretTableHTML(a, practice, solved){
+  var i, j;
+  var h = '<div class="cols2"><div><p class="hint">Column maxima — the best anyone could do in each state</p>' +
+          '<table class="dataT"><tr><th></th>';
+  for(j = 0; j < STATE.states.length; j++) h += '<th>' + esc(STATE.states[j]) + '</th>';
+  h += '</tr><tr><td class="jb">Best in state</td>';
+  for(j = 0; j < STATE.states.length; j++) h += '<td class="mark">' + fmt(a.colMax[j]) + '</td>';
+  h += '</tr></table></div><div><p class="hint">Regret table — best in state minus this payoff</p>' +
+       '<table class="dataT"><tr><th></th>';
+  for(j = 0; j < STATE.states.length; j++) h += '<th>' + esc(STATE.states[j]) + '</th>';
+  h += '<th>Worst regret</th></tr>';
+  var answering = practice && !solved, pickedRow = answering ? STATE.ans['regretrow'] : null;
+  for(i = 0; i < STATE.alts.length; i++){
+    var isWin = (!practice || solved) && a.minimaxRegret.winners.indexOf(i) > -1;
+    var isPicked = pickedRow === i;
+    h += '<tr class="' + ((isWin ? 'win ' : '') + (isPicked ? 'picked' : '')).trim() + '">';
+    h += '<td class="jb' + (answering ? ' selectable' : '') + '" data-row="' + i + '">' + esc(STATE.alts[i]) +
+         (isPicked ? '<span class="tick">✓ chosen</span>' : '') + '</td>';
+    for(j = 0; j < STATE.states.length; j++){
+      if(answering)
+        h += '<td><input type="number" step="any" data-reg="' + i + ',' + j + '" value="' +
+             savedAns('regretcell' + i + '_' + j) + '"' +
+             markAttr('regret', 'regretcell' + i + '_' + j, a.regret[i][j]) + '></td>';
+      else h += '<td>' + fmt(a.regret[i][j]) + '</td>';
+    }
+    h += '<td class="' + (isWin ? 'good' : '') + '">' + ((!practice || solved) ? fmt(a.regretRowMax[i]) : '') + '</td></tr>';
+  }
+  h += '</table>';
+  if(answering) h += pickStateHTML('regret', { want:'regret' });
+  return h + '</div></div>';
+}
+
+function evpiHTML(a, practice, solved){
+  var j, h = '';
+  if(practice && !solved){
+    h += '<div class="practice"><div class="q">Your turn</div>' +
+         'Work out the <b>expected payoff under certainty</b> — weight the best payoff in each state by that state\'s probability — then subtract the best EMV to get EVPI.' +
+         '<div class="row"><label class="fld">Payoff under certainty <input type="number" step="any" id="inCert" value="' +
+         savedAns('evpiCert') + '"' + markAttr('evpi', 'evpiCert', a.certainty) + '></label>' +
+         '<label class="fld">EVPI <input type="number" step="any" id="inEvpi" value="' +
+         savedAns('evpiEvpi') + '"' + markAttr('evpi', 'evpiEvpi', a.evpi) + '></label></div>' +
+         '<div class="row"><button class="primary" id="pCheck">Check</button><button id="pShow">Show answer</button></div>' +
+         '<div class="fb" id="pFb"></div></div>';
+  }
+  h += '<table class="dataT"><tr><th></th>';
+  for(j = 0; j < STATE.states.length; j++) h += '<th>' + esc(STATE.states[j]) + '<br><span style="font-weight:400">p = ' + fmt(STATE.probs[j]) + '</span></th>';
+  h += '</tr><tr><td class="jb">Best payoff in state</td>';
+  for(j = 0; j < STATE.states.length; j++) h += '<td class="mark">' + fmt(a.colMax[j]) + '</td>';
+  h += '</tr></table>';
+  if(solved){
+    var terms = [];
+    for(j = 0; j < STATE.states.length; j++) terms.push(fmt(a.colMax[j]) + '(' + fmt(STATE.probs[j]) + ')');
+    h += '<div class="explain">Expected payoff under certainty <code>= ' + terms.join(' + ') + ' = ' + fmt(a.certainty) + '</code><br>' +
+         'Expected payoff under risk (the best EMV) <code>= ' + fmt(a.emvPick.best) + '</code><br>' +
+         '<b>EVPI</b> <code>= ' + fmt(a.certainty) + ' − ' + fmt(a.emvPick.best) + ' = ' + fmt(a.evpi) + '</code><br>' +
+         'That is the most it would be worth paying for a perfect forecast.</div>';
+  }
+  return h;
+}
+
+function practicePanel(key, cfg){
+  var ask = {
+    maximin:'Click the <b>smallest</b> payoff in each row — it copies into the Row minimum column — then click an <b>alternative name</b> on the left to choose it.',
+    maximax:'Click the <b>largest</b> payoff in each row — it copies into the Row maximum column — then click an <b>alternative name</b> on the left to choose it.',
+    laplace:'Type each row\'s average, then click an <b>alternative name</b> on the left to choose it.',
+    regret:'Fill the regret table, then click an <b>alternative name</b> to choose it.',
+    emv:'Type each row\'s EMV, then click an <b>alternative name</b> to choose the highest.'
+  }[key];
+  return '<div class="practice"><div class="q">Your turn</div>' + ask +
+         '<div class="row"><button class="primary" id="pCheck">Check</button>' +
+         '<button id="pShow">Show answer</button></div><div class="fb" id="pFb"></div></div>';
+}
+
+function summaryHTML(a){
+  var rows = [
+    ['Maximin', a.maximin], ['Maximax', a.maximax], ['Laplace', a.laplace], ['Minimax regret', a.minimaxRegret]
+  ];
+  if(a.emvPick) rows.push(['EMV', a.emvPick]);
+  var h = '<table class="dataT"><tr><th>Criterion</th><th>Chooses</th><th>Value</th></tr>';
+  for(var i = 0; i < rows.length; i++)
+    h += '<tr><td class="jb">' + rows[i][0] + '</td><td class="jb">' + esc(listNames(rows[i][1].winners, STATE.alts)) +
+         (rows[i][1].winners.length > 1 ? ' <span class="hint">(tie)</span>' : '') + '</td>' +
+         '<td>' + fmt(rows[i][1].best) + '</td></tr>';
+  h += '</table>';
+  var agree = criteriaAgree(a);
+  h += '<div class="explain">' + (agree.length
+    ? 'Every criterion points at <b>' + esc(listNames(agree, STATE.alts)) + '</b>. When they agree the choice is easy — but they often do not.'
+    : 'The criteria <b>disagree</b>. That is the point of the lesson: each one encodes a different attitude to what you do not know, so there is no single "right" answer without saying which attitude you are taking.') +
+    '</div>';
+  if(a.emvPick)
+    h += '<div class="explain">EVPI is <b>' + fmt(a.evpi) + '</b> — the ceiling on what a perfect forecast is worth here.</div>';
+  if(STATE.useProbs)
+    h += '<div class="row noprint"><button class="primary" id="toTree">Draw this as a tree ▶</button>' +
+         '<span class="hint">A payoff table with probabilities is the same information as a one-stage tree.</span></div>';
+  return h;
+}
+
+var TABLE_WORK_KEY = null;
+function wireTableWork(key, a, practice, solved){
+  function on(id, fn){ var e = $(id); if(e) e.addEventListener('click', fn); }
+  var steps = tableSteps();
+  on('tBack', function(){ STATE.step = Math.max(0, STATE.step - 1); STATE.banner = null; renderTableWork(); });
+  on('tNext', function(){ STATE.step = Math.min(steps.length - 1, STATE.step + 1); STATE.banner = null; renderTableWork(); });
+  on('tRestart', function(){ STATE.step = 0; STATE.ans = {}; STATE.banner = null; renderTableWork(); });
+  on('tEdit', function(){
+    STATE.step = -1; STATE.banner = null;
+    $('workCard').classList.add('hidden'); $('setupCard').classList.remove('hidden');
+    renderTableSetup();
+  });
+  on('toTree', function(){
+    STATE.tree = tableToTree(STATE.P, STATE.probs, STATE.alts, STATE.states);
+    STATE.tab = 'tree'; STATE.tstep = -1; STATE.sel = null; STATE.tans = {};
+    STATE.banner = 'Carried over from the payoff table. Each alternative is a branch, each state a chance branch — ' +
+                   'fold it back and the root value is the best EMV.';
+    STATE.neutral = true;
+    renderTabBar(); renderAll();
+  });
+
+  var cells = $('workBody').querySelectorAll('td.pick');
+  for(var c = 0; c < cells.length; c++) cells[c].addEventListener('click', function(){
+    var p = this.dataset.cell.split(',');
+    STATE.ans[key + 'cell' + p[0]] = +p[1];
+    renderTableWork();
+  });
+  /* keep every keystroke in STATE so a redraw never loses it; no re-render here,
+     or typing would be interrupted after each character. #workBody outlives every
+     redraw, so the listener goes on once and reads the step it is on from
+     TABLE_WORK_KEY — one listener per redraw would pile up, and the old ones would
+     write this step's typing into earlier steps' saved answers. */
+  TABLE_WORK_KEY = key;
+  if(!wireTableWork.typing){
+    wireTableWork.typing = true;
+    $('workBody').addEventListener('input', function(e){
+      var t = e.target, k = TABLE_WORK_KEY;
+      if(t.dataset.val !== undefined) STATE.ans[k + 'val' + t.dataset.val] = t.value;
+      else if(t.dataset.reg !== undefined) STATE.ans['regretcell' + t.dataset.reg.replace(',', '_')] = t.value;
+      else if(t.id === 'inCert') STATE.ans.evpiCert = t.value;
+      else if(t.id === 'inEvpi') STATE.ans.evpiEvpi = t.value;
+    });
+  }
+
+  /* both the payoff table and the regret table carry the alternative names, and
+     clicking either should register the same choice */
+  var rowLabels = $('workBody').querySelectorAll('td.jb.selectable');
+  for(var r = 0; r < rowLabels.length; r++) rowLabels[r].addEventListener('click', function(){
+    var idx = +this.dataset.row;
+    STATE.ans[key + 'row'] = (STATE.ans[key + 'row'] === idx) ? null : idx;   /* click again to clear */
+    renderTableWork();
+  });
+  on('pCheck', function(){ checkTableStep(key, a); });
+  on('pShow', function(){
+    STATE.ans[key] = true;
+    STATE.banner = 'Answer shown.'; STATE.neutral = true;
+    renderTableWork();
+  });
+}
+
+function checkTableStep(key, a){
+  var fb = $('pFb'), i, j, allGood = true, msg = '';
+  function bad(m){ fb.className = 'fb badFb'; fb.textContent = m; }
+
+  STATE.ans[key + 'checked'] = true;   /* marks are recomputed from stored values on redraw */
+
+  if(key === 'evpi'){
+    var okC = answerOk(parseFloat($('inCert').value), a.certainty);
+    var okE = answerOk(parseFloat($('inEvpi').value), a.evpi);
+    $('inCert').className = okC ? 'good' : 'badIn';
+    $('inEvpi').className = okE ? 'good' : 'badIn';
+    if(okC && okE){ pass(key, 'EVPI is ' + fmt(a.evpi) + ' — the most a perfect forecast is worth.'); return; }
+    bad(!okC ? 'The payoff under certainty weights the BEST payoff in each state by that state\'s probability.'
+             : 'EVPI = payoff under certainty − the best EMV.');
+    return;
+  }
+
+  /* row pick is required for every criterion step */
+  var picked = STATE.ans[key + 'row'];
+  var pick = { maximin:a.maximin, maximax:a.maximax, laplace:a.laplace, regret:a.minimaxRegret, emv:a.emvPick }[key];
+
+  if(key === 'maximin' || key === 'maximax'){
+    var want = key === 'maximin' ? a.rowMin : a.rowMax;
+    for(i = 0; i < STATE.alts.length; i++){
+      var chosen = STATE.ans[key + 'cell' + i];
+      if(chosen == null || !near(STATE.P[i][chosen], want[i])) allGood = false;
+    }
+    if(!allGood){ bad('At least one row\'s ' + (key === 'maximin' ? 'minimum' : 'maximum') + ' is not marked correctly.'); return; }
+  }
+  if(key === 'laplace' || key === 'emv'){
+    var vals = key === 'laplace' ? a.rowMean : a.emv;
+    var ins = $('workBody').querySelectorAll('input[data-val]');
+    for(i = 0; i < ins.length; i++){
+      var k = +ins[i].dataset.val, good = answerOk(parseFloat(ins[i].value), vals[k]);
+      ins[i].className = good ? 'good' : 'badIn';
+      if(!good) allGood = false;
+    }
+    if(!allGood){
+      bad(key === 'laplace' ? 'The red boxes are wrong — add the row and divide by the number of states.'
+                            : 'The red boxes are wrong — multiply each payoff by its state probability and add.');
+      return;
+    }
+  }
+  if(key === 'regret'){
+    var regIns = $('workBody').querySelectorAll('input[data-reg]');
+    for(i = 0; i < regIns.length; i++){
+      var p = regIns[i].dataset.reg.split(','), g = answerOk(parseFloat(regIns[i].value), a.regret[+p[0]][+p[1]]);
+      regIns[i].className = g ? 'good' : 'badIn';
+      if(!g) allGood = false;
+    }
+    if(!allGood){ bad('The red cells are wrong — regret is the best payoff in that state minus this one, so it is never negative.'); return; }
+  }
+
+  if(picked == null){ bad('Now click the alternative this criterion chooses.'); return; }
+  if(pick.winners.indexOf(picked) < 0){
+    bad('"' + STATE.alts[picked] + '" is not what ' + CRIT_TITLE[key] + ' chooses. Compare the last column again.');
+    return;
+  }
+  pass(key, CRIT_TITLE[key] + ' chooses <b>' + esc(listNames(pick.winners, STATE.alts)) + '</b>' +
+       (pick.winners.length > 1 ? ' — a tie, and both must be reported' : '') + '.');
+}
+function pass(key, msg){
+  STATE.ans[key] = true;
+  STATE.banner = '✓ Correct — ' + msg;
+  STATE.neutral = false;
+  renderTableWork();
+}
+
+/* =====================================================================
+   MODE B — decision tree
+   ===================================================================== */
+
+function buildSkeleton(){
+  var f = STATE.form, i, j, states = [], probs = [], kids = [];
+  for(j = 0; j < f.states; j++){ states.push('State ' + (j + 1)); probs.push(Math.round(100 / f.states) / 100); }
+  probs[f.states - 1] = Math.round((1 - probs.slice(0, f.states - 1).reduce(function(s, v){ return s + v; }, 0)) * 100) / 100;
+  STATE.stateNames = states; STATE.stateProbs = probs;
+  for(i = 0; i < f.alts; i++){
+    var chanceKids = [];
+    for(j = 0; j < f.states; j++){
+      var tail;
+      if(f.second){
+        var opts = [];
+        for(var k = 0; k < f.secondOpts; k++) opts.push(tBranch('Option ' + (k + 1), tLeaf(0)));
+        tail = tDecision(opts, '', 0);
+      } else tail = tLeaf(0);
+      chanceKids.push(tBranch(states[j], tail, probs[j]));
+    }
+    kids.push(tBranch('Alternative ' + 'ABCDEF'[i], tChance(chanceKids)));
+  }
+  STATE.tree = tDecision(kids, 'Decision');
+  STATE.tstep = -1; STATE.sel = null; STATE.tans = {};
+}
+/* Same idea as the payoff table: a leaf's payoff rises with how favourable the
+   states on its path were, and with how bold the alternative was, so the numbers
+   tell a consistent story instead of being noise. */
+function randomTree(){
+  var base = 40 + Math.round(Math.random() * 8) * 10;
+  (function walk(n, favour, boldness, depth){
+    if(n.type === 'leaf'){
+      var spread = 20 + 170 * boldness;
+      n.payoff = Math.round((base + 15 * boldness + (favour - 0.5) * spread +
+                             (Math.random() - 0.5) * spread * 0.16) / 5) * 5;
+      return;
+    }
+    if(n.type === 'chance'){
+      var ps = randomProbabilities(n.children.length);
+      for(var i = 0; i < n.children.length; i++) n.children[i].prob = ps[i];
+    }
+    for(var k = 0; k < n.children.length; k++){
+      var frac = n.children.length < 2 ? 0.5 : k / (n.children.length - 1);
+      if(n.type === 'chance')
+        /* a better state carries more favour down the branch */
+        walk(n.children[k].node, favour * 0.45 + frac * 0.55, boldness, depth + 1);
+      else
+        /* at the root the branches are the alternatives, so they set boldness;
+           deeper down a later option is the bolder move */
+        walk(n.children[k].node, favour, depth === 0 ? frac : Math.min(1, boldness + frac * 0.25), depth + 1);
+    }
+  })(STATE.tree, 0.5, 0.5, 0);
+  /* same reason as the payoff table: do not always leave the bold alternative last */
+  var kids = STATE.tree.children;
+  for(var i = kids.length - 1; i > 0; i--){
+    var s = Math.floor(Math.random() * (i + 1)), t = kids[i];
+    kids[i] = kids[s]; kids[s] = t;
+  }
+  for(i = 0; i < kids.length; i++) kids[i].label = 'Alternative ' + 'ABCDEF'[i];
+  STATE.tstep = -1; STATE.tans = {};
+}
+
+/* ---- layout, spec 4.5 ---- */
+function layoutTree(root){
+  var LEVEL = 190, GAP = 56, slot = 0, nodes = [];
+  (function place(n, depth){
+    n._d = depth;
+    if(n.type === 'leaf'){ n._y = slot * GAP; slot++; }
+    else {
+      var ys = [];
+      for(var i = 0; i < n.children.length; i++){ place(n.children[i].node, depth + 1); ys.push(n.children[i].node._y); }
+      n._y = ys.reduce(function(a, b){ return a + b; }, 0) / ys.length;
+    }
+    n._x = depth * LEVEL;
+    nodes.push(n);
+  })(root, 0);
+  var maxX = 0, maxY = 0;
+  for(var i = 0; i < nodes.length; i++){ maxX = Math.max(maxX, nodes[i]._x); maxY = Math.max(maxY, nodes[i]._y); }
+  return { nodes:nodes, W: maxX + 190, H: maxY + 70, LEVEL:LEVEL };
+}
+
+function treeSVG(root, opts){
+  opts = opts || {};
+  var lay = layoutTree(root), M = 34, R = 15;
+
+  /* Branches on the surviving policy: follow the chosen branch at a decision,
+     every branch at a chance node. Used to thicken the path at the end. */
+  var onPath = [];
+  if(opts.showPath){
+    (function mark(n){
+      if(n.type === 'leaf') return;
+      for(var i = 0; i < n.children.length; i++){
+        if(n.type === 'decision' && n.chosen && n.chosen.indexOf(i) < 0) continue;
+        onPath.push(n.children[i]);
+        mark(n.children[i].node);
+      }
+    })(root);
+  }
+  function settled(n){ return !opts.upto || opts.upto.indexOf(n) > -1; }
+  var g = '<defs><marker id="tm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">' +
+          '<path d="M0 0 L10 5 L0 10 z" fill="#9ca3af"/></marker></defs>';
+
+  (function draw(n){
+    var x = n._x + M, y = n._y + M, i;
+    for(i = 0; i < (n.children || []).length; i++){
+      var c = n.children[i], cn = c.node, cx = cn._x + M, cy = cn._y + M;
+      /* a branch is only shown as rejected once its own node has been settled */
+      var cut = c.cut === true && opts.showCuts && settled(n);
+      var thick = onPath.indexOf(c) > -1;
+      g += '<line x1="' + (x + R) + '" y1="' + y + '" x2="' + (cx - R - 2) + '" y2="' + cy +
+           '" stroke="' + (cut ? '#cbd5e1' : (thick ? '#16a34a' : '#6b7280')) +
+           '" stroke-width="' + (thick ? 4 : 1.8) +
+           '" opacity="' + (cut ? 0.4 : 1) + '" marker-end="url(#tm)"/>';
+      var mx = (x + cx) / 2, my = (y + cy) / 2 - 7;
+      var lab = esc(c.label) + (c.prob != null ? '  ' + fmt(c.prob) : '');
+      g += '<rect x="' + (mx - lab.length * 3.6 - 4) + '" y="' + (my - 11) + '" width="' + (lab.length * 7.2 + 8) +
+           '" height="17" rx="4" fill="#fff" opacity="0.9"/>';
+      g += '<text x="' + mx + '" y="' + (my + 2) + '" text-anchor="middle" font-size="12.5" fill="' +
+           (cut ? '#9ca3af' : '#374151') + '" opacity="' + (cut ? 0.5 : 1) + '">' + lab + '</text>';
+      draw(cn);
+    }
+  })(root);
+
+  for(var i = 0; i < lay.nodes.length; i++){
+    var n = lay.nodes[i], x = n._x + M, y = n._y + M;
+    var sel = opts.sel === n, now = opts.now === n;
+    var stroke = sel ? '#2563eb' : (now ? '#d97706' : '#475569');
+    var sw = (sel || now) ? 3 : 1.8;
+    if(n.type === 'decision')
+      g += '<rect class="hit" data-nid="' + i + '" x="' + (x - R) + '" y="' + (y - R) + '" width="' + (R * 2) +
+           '" height="' + (R * 2) + '" rx="3" fill="#fff" stroke="' + stroke + '" stroke-width="' + sw + '"/>';
+    else if(n.type === 'chance')
+      g += '<circle class="hit" data-nid="' + i + '" cx="' + x + '" cy="' + y + '" r="' + R +
+           '" fill="#fff" stroke="' + stroke + '" stroke-width="' + sw + '"/>';
+    else
+      g += '<polygon class="hit" data-nid="' + i + '" points="' + x + ',' + (y - R) + ' ' + (x + R) + ',' + y + ' ' +
+           x + ',' + (y + R) + ' ' + (x - R) + ',' + y + '" fill="#fff" stroke="' + stroke + '" stroke-width="' + sw + '"/>';
+
+    if(n.type === 'leaf'){
+      g += '<text x="' + (x + R + 8) + '" y="' + (y + 5) + '" font-size="14.5" font-weight="700" fill="#1f2937">' +
+           fmt(n.payoff) + '</text>';
+    } else if(n.value != null && opts.showValues && settled(n)){
+      /* the deck CIRCLES the value it settles on, rather than striking the losers */
+      var vt = fmt(n.value);
+      g += '<ellipse cx="' + x + '" cy="' + (y - R - 14) + '" rx="' + (vt.length * 5 + 12) + '" ry="13" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>';
+      g += '<text x="' + x + '" y="' + (y - R - 9) + '" text-anchor="middle" font-size="13.5" font-weight="800" fill="#16a34a">' + vt + '</text>';
+    }
+  }
+  lay.svg = '<div class="canvasWrap"><svg viewBox="0 0 ' + lay.W + ' ' + lay.H + '" width="' + lay.W +
+            '" height="' + lay.H + '" xmlns="http://www.w3.org/2000/svg">' + g + '</svg></div>';
+  return lay;
+}
+
+function renderTreeSetup(){
+  var f = STATE.form;
+  var h = bannerHTML() + '<h2>Build the tree</h2>' +
+    '<p class="hint">The form makes a regular starting shape. Use the inspector to reshape it — none of the lecture trees is regular.</p>' +
+    '<div class="row noprint">' +
+    '<label class="fld">Alternatives <select id="fAlts">' + sizeOpts(2, 6, f.alts) + '</select></label>' +
+    '<label class="fld">States <select id="fStates">' + sizeOpts(2, 4, f.states) + '</select></label>' +
+    '<label class="fld"><input type="checkbox" id="fSecond"' + (f.second ? ' checked' : '') + '> second-stage decision</label>' +
+    '<label class="fld">Second-stage options <select id="fOpts"' + (f.second ? '' : ' disabled') + '>' + sizeOpts(2, 9, f.secondOpts) + '</select></label>' +
+    '<button id="fMake">Generate skeleton</button></div>';
+  if(STATE.tree){
+    var errs = validateTree(STATE.tree);
+    h += '<div class="treeLayout">' + treeSVG(STATE.tree, { sel:STATE.sel }).svg + inspectorHTML() + '</div>';
+    if(errs.length){
+      h += '<ul class="errList">';
+      for(var i = 0; i < Math.min(errs.length, 4); i++) h += '<li class="err">' + esc(errs[i]) + '</li>';
+      h += '</ul>';
+    }
+    h += '<div class="row noprint"><button id="tRand">Random values</button>' +
+         '<button class="primary" id="tStart"' + (errs.length ? ' disabled' : '') + '>Start ▶</button></div>';
+  }
+  var again = focusKey($('setupBody'));       /* see focusKey: keep the cursor while typing */
+  $('setupBody').innerHTML = h;
+  wireTreeSetup();
+  refocus($('setupBody'), again);
+}
+
+function inspectorHTML(){
+  var n = STATE.sel;
+  if(!n) return '<div class="inspector"><h3>Inspector</h3><p class="hint">Click a node to edit it. ' +
+    'Squares are decisions, circles are chance events, diamonds are payoffs.</p></div>';
+  var h = '<div class="inspector"><h3>' +
+    (n.type === 'decision' ? 'Decision node' : n.type === 'chance' ? 'Chance node' : 'Payoff') + '</h3>';
+  if(n.type === 'leaf'){
+    h += '<div class="row"><label class="fld">Payoff <input type="number" step="any" id="iPay" value="' + fmt(n.payoff) + '"></label></div>';
+    h += '<div class="row"><button id="iToChance">→ chance node</button></div>';
+    h += '<div class="row"><button id="iToDec">→ decision node</button></div>';
+  } else {
+    h += '<p class="hint">' + n.children.length + ' branches</p>';
+    for(var i = 0; i < n.children.length; i++){
+      h += '<div class="row"><input type="text" data-bl="' + i + '" value="' + esc(n.children[i].label) + '" style="width:110px">';
+      if(n.type === 'chance') h += '<input type="number" step="any" data-bp="' + i + '" value="' + fmt(n.children[i].prob) + '" style="width:70px">';
+      h += '</div>';
+    }
+    h += '<div class="row"><button id="iAdd">+ branch</button>' +
+         '<button id="iDel"' + (n.children.length <= 2 ? ' disabled' : '') + '>− branch</button></div>';
+    if(n.type === 'decision' && n !== STATE.tree){
+      h += '<div class="row"><label class="fld" style="font-size:13px">no-action branch<select id="iBase">';
+      for(var k = 0; k < n.children.length; k++)
+        h += '<option value="' + k + '"' + ((n.baseline || 0) === k ? ' selected' : '') + '>' + esc(n.children[k].label) + '</option>';
+      h += '</select></label></div>';
+    }
+    if(n !== STATE.tree){
+      if(STATE.leafAsk === n)
+        h += '<p class="hint" style="color:var(--bad);margin:10px 0 0">Replace this node and everything below it with a single payoff?</p>' +
+             '<div class="row"><button id="iLeafYes">Replace</button><button id="iLeafNo">Cancel</button></div>';
+      else h += '<div class="row"><button id="iToLeaf">→ payoff</button></div>';
+    }
+  }
+  return h + '</div>';
+}
+
+function findNode(nid){ return layoutTree(STATE.tree).nodes[nid]; }
+function parentOf(target){
+  var found = null;
+  (function walk(n){
+    for(var i = 0; i < (n.children || []).length; i++){
+      if(n.children[i].node === target) found = n;
+      walk(n.children[i].node);
+    }
+  })(STATE.tree);
+  return found;
+}
+
+function wireTreeSetup(){
+  function on(id, fn){ var e = $(id); if(e) e.addEventListener('click', fn); }
+  var f = STATE.form;
+  $('fAlts').addEventListener('change', function(){ f.alts = +this.value; });
+  $('fStates').addEventListener('change', function(){ f.states = +this.value; });
+  $('fSecond').addEventListener('change', function(){ f.second = this.checked; renderTreeSetup(); });
+  $('fOpts').addEventListener('change', function(){ f.secondOpts = +this.value; });
+  on('fMake', function(){ buildSkeleton(); renderTreeSetup(); });
+  on('tRand', function(){ randomTree(); renderTreeSetup(); });
+  on('tStart', function(){
+    foldBack(STATE.tree);
+    STATE.order = foldOrder(STATE.tree);
+    STATE.tstep = 0; STATE.tans = {}; STATE.banner = null;
+    $('setupCard').classList.add('hidden'); $('workCard').classList.remove('hidden');
+    renderTreeWork();
+  });
+
+  var hits = $('setupBody').querySelectorAll('.hit');
+  for(var i = 0; i < hits.length; i++) hits[i].addEventListener('click', function(){
+    STATE.sel = findNode(+this.dataset.nid); renderTreeSetup();
+  });
+
+  var n = STATE.sel;
+  if(!n) return;
+  var pay = $('iPay');
+  if(pay) pay.addEventListener('input', function(){ if(halfTyped(this)) return; n.payoff = parseFloat(this.value); renderTreeSetup(); });
+  on('iToChance', function(){
+    n.type = 'chance'; delete n.payoff;
+    n.children = (STATE.stateNames || ['State 1', 'State 2']).map(function(s, k){
+      return tBranch(s, tLeaf(0), (STATE.stateProbs || [0.5, 0.5])[k]);
+    });
+    renderTreeSetup();
+  });
+  on('iToDec', function(){
+    n.type = 'decision'; delete n.payoff;
+    n.children = [tBranch('Option 1', tLeaf(0)), tBranch('Option 2', tLeaf(0))];
+    n.baseline = 0;
+    renderTreeSetup();
+  });
+  /* asked on the page rather than with confirm(): pop-up boxes may be blocked
+     when the file is opened on an iPad/iPhone */
+  on('iToLeaf',  function(){ STATE.leafAsk = n; renderTreeSetup(); });
+  on('iLeafNo',  function(){ STATE.leafAsk = null; renderTreeSetup(); });
+  on('iLeafYes', function(){
+    STATE.leafAsk = null;
+    n.type = 'leaf'; n.payoff = 0; delete n.children; delete n.baseline;
+    renderTreeSetup();
+  });
+  on('iAdd', function(){
+    var k = n.children.length;
+    n.children.push(tBranch(n.type === 'chance' ? 'State ' + (k + 1) : 'Option ' + (k + 1), tLeaf(0),
+                            n.type === 'chance' ? 0 : undefined));
+    renderTreeSetup();
+  });
+  on('iDel', function(){ if(n.children.length > 2){ n.children.pop(); renderTreeSetup(); } });
+  var base = $('iBase');
+  if(base) base.addEventListener('change', function(){ n.baseline = +this.value; });
+  var ins = $('setupBody').querySelectorAll('[data-bl],[data-bp]');
+  for(var q = 0; q < ins.length; q++) ins[q].addEventListener('input', function(){
+    if(this.dataset.bl !== undefined) n.children[+this.dataset.bl].label = this.value;
+    else if(!halfTyped(this)){ n.children[+this.dataset.bp].prob = parseFloat(this.value); renderTreeSetup(); }
+  });
+}
+
+/* ---- fold-back walkthrough ---- */
+function renderTreeWork(){
+  if(STATE.tstep < 0 || !STATE.tree){ $('workCard').classList.add('hidden'); return; }
+  $('workCard').classList.remove('hidden');
+  var order = STATE.order, total = order.length + 2;   /* structure, node types, then one per node */
+  var s = STATE.tstep, practice = STATE.mode === 'practice';
+  var h = '<h2>Fold the tree back</h2>' + bannerHTML();
+  h += '<div class="row noprint">' +
+       '<button id="wBack"' + (s === 0 ? ' disabled' : '') + '>◀ Back</button>' +
+       '<button class="primary" id="wNext"' + (s >= total - 1 || !treeStepSolved(s) ? ' disabled' : '') + '>Next ▶</button>' +
+       '<button id="wRestart">↺ Restart</button><button id="wEdit">✎ Edit problem</button>' +
+       '<span class="hint">Step ' + (s + 1) + ' of ' + total + '</span></div>';
+
+  /* Only nodes already worked out may show their value or their rejected
+     branches. The current node joins them once it has been answered — in
+     guided mode that is immediate, in practice only after Check. */
+  var nowIdx = s - 2;
+  var now = nowIdx >= 0 ? order[nowIdx] : null;
+  var settled = Math.max(0, nowIdx);
+  if(nowIdx >= 0 && treeStepSolved(s)) settled = nowIdx + 1;
+  var upto = order.slice(0, settled);
+
+  if(s === 0){
+    h += '<div class="explain">The tree runs left to right in time. A <b>square</b> is a decision you control; ' +
+         'a <b>circle</b> is a chance event you do not. Payoffs sit at the tips. ' +
+         'Folding back means working <b>right to left</b>: average at chance nodes, choose at decision nodes.</div>';
+  } else if(s === 1){
+    h += '<div class="explain">Count them: ' + countType(STATE.tree, 'decision') + ' decision node(s), ' +
+         countType(STATE.tree, 'chance') + ' chance node(s), ' + countType(STATE.tree, 'leaf') + ' payoffs. ' +
+         'Every chance node\'s probabilities add to 1.</div>';
+  } else if(now){
+    h += nodeStepHTML(now, practice);
+  }
+
+  h += treeSVG(STATE.tree, { showValues:true, upto:upto, now:now, showCuts:s >= 2, showPath:s >= total - 1 }).svg;
+  h += '<div class="legendRow"><span>▢ decision</span><span>◯ chance</span><span>◇ payoff</span>' +
+       '<span>the circled figure is the value that node settles on</span></div>';
+
+  /* the closing summary names the root value, so it must wait until the
+     student has actually answered the root step */
+  if(s >= total - 1 && treeStepSolved(s)){
+    var ov = optionValue(STATE.tree);
+    h += '<div class="explain">The root is worth <b>' + fmt(STATE.tree.value) + '</b>, taking <b>' +
+         esc(listNames(STATE.tree.chosen, STATE.tree.children.map(function(c){ return c.label; }))) + '</b>.</div>';
+    if(ov)
+      h += '<div class="explain"><b>Value of the option.</b> Committing now to the no-action branch at every later ' +
+           'decision would be worth ' + fmt(ov.without) + '. Keeping the choice open is worth ' + fmt(ov.withOption) +
+           '. The flexibility is therefore worth <code>' + fmt(ov.withOption) + ' − ' + fmt(ov.without) + ' = ' +
+           fmt(ov.value) + '</code>.</div>';
+  }
+  $('workBody').innerHTML = h;
+  wireTreeWork(total);
+}
+function countType(n, t){
+  var c = (n.type === t) ? 1 : 0;
+  for(var i = 0; i < (n.children || []).length; i++) c += countType(n.children[i].node, t);
+  return c;
+}
+function treeStepSolved(s){
+  if(STATE.mode !== 'practice' || s < 2) return true;
+  return STATE.tans['n' + (s - 2)] === true;
+}
+function nodeStepHTML(n, practice){
+  var i, h = '', solved = !practice || STATE.tans['n' + STATE.order.indexOf(n)] === true;
+  var kidLabel = n.children.map(function(c){ return esc(c.label); });
+  if(n.type === 'chance'){
+    if(practice && !solved){
+      h += '<div class="practice"><div class="q">Chance node</div>' +
+           'Average the branches: multiply each value by its probability and add.' +
+           '<div class="row"><label class="fld">Value <input type="number" step="any" id="nVal"></label>' +
+           '<button class="primary" id="nCheck">Check</button><button id="nShow">Show answer</button></div>' +
+           '<div class="fb" id="nFb"></div></div>';
+    } else {
+      var terms = [];
+      for(i = 0; i < n.children.length; i++)
+        terms.push('(' + fmt(n.children[i].prob) + ')(' + fmt(n.children[i].node.value) + ')');
+      h += '<div class="explain"><b>Chance node</b> — no choice here, so take the weighted average.<br>' +
+           '<code>' + terms.join(' + ') + ' = ' + fmt(n.value) + '</code></div>';
+    }
+  } else {
+    if(practice && !solved){
+      h += '<div class="practice"><div class="q">Decision node</div>' +
+           'Which branch survives? Click it — the others are rejected.' +
+           '<div class="row">';
+      for(i = 0; i < n.children.length; i++)
+        h += '<button data-branch="' + i + '">' + kidLabel[i] + ' · ' + fmt(n.children[i].node.value) + '</button>';
+      h += '</div><div class="row"><button id="nShow">Show answer</button></div><div class="fb" id="nFb"></div></div>';
+    } else {
+      var best = n.children.map(function(c, k){ return { k:k, v:c.node.value }; })
+                  .sort(function(a, b){ return b.v - a.v; });
+      h += '<div class="explain"><b>Decision node</b> — you choose, so take the best branch. ' +
+           kidLabel.map(function(l, k){ return l + ' = ' + fmt(n.children[k].node.value); }).join(', ') + '. ' +
+           'Keep <b>' + esc(listNames(n.chosen, kidLabel)) + '</b> at ' + fmt(n.value) + '; the rest are rejected.</div>';
+    }
+  }
+  return h;
+}
+function wireTreeWork(total){
+  function on(id, fn){ var e = $(id); if(e) e.addEventListener('click', fn); }
+  on('wBack', function(){ STATE.tstep = Math.max(0, STATE.tstep - 1); STATE.banner = null; renderTreeWork(); });
+  on('wNext', function(){ STATE.tstep = Math.min(total - 1, STATE.tstep + 1); STATE.banner = null; renderTreeWork(); });
+  on('wRestart', function(){ STATE.tstep = 0; STATE.tans = {}; STATE.banner = null; renderTreeWork(); });
+  on('wEdit', function(){
+    STATE.tstep = -1; STATE.banner = null;
+    $('workCard').classList.add('hidden'); $('setupCard').classList.remove('hidden');
+    renderTreeSetup();
+  });
+  var idx = STATE.tstep - 2;
+  if(idx < 0) return;
+  var n = STATE.order[idx];
+  on('nCheck', function(){
+    var fb = $('nFb'), v = parseFloat($('nVal').value);
+    if(answerOk(v, n.value)){
+      STATE.tans['n' + idx] = true;
+      STATE.banner = '✓ Correct — this node is worth ' + fmt(n.value) + '.'; STATE.neutral = false;
+      renderTreeWork();
+    } else { fb.className = 'fb badFb'; fb.textContent = 'Not right. Multiply each branch value by its probability, then add them all.'; }
+  });
+  on('nShow', function(){
+    STATE.tans['n' + idx] = true;
+    STATE.banner = 'Answer shown — this node is worth ' + fmt(n.value) + '.'; STATE.neutral = true;
+    renderTreeWork();
+  });
+  var bs = $('workBody').querySelectorAll('[data-branch]');
+  for(var i = 0; i < bs.length; i++) bs[i].addEventListener('click', function(){
+    var k = +this.dataset.branch, fb = $('nFb');
+    if(n.chosen.indexOf(k) > -1){
+      STATE.tans['n' + idx] = true;
+      STATE.banner = '✓ Correct — keep ' + esc(n.children[k].label) + ' at ' + fmt(n.value) + '.';
+      STATE.neutral = false;
+      renderTreeWork();
+    } else {
+      fb.className = 'fb badFb';
+      fb.textContent = esc(n.children[k].label) + ' is worth ' + fmt(n.children[k].node.value) +
+                       ', but another branch is worth more. You choose here, so take the best.';
+    }
+  });
+}
+
+/* ---------------- init ---------------- */
+function initApp(){
+  renderTabBar();
+  segWire('segMode', function(v){
+    STATE.mode = v; STATE.ans = {}; STATE.tans = {}; STATE.banner = null;
+    renderAll();
+  });
+  $('btnPrint').addEventListener('click', function(){ window.print(); });
+  defaultTable();
+  STATE.form = { alts:2, states:2, second:true, secondOpts:2 };
+  renderAll();
+}
+
+function showAcceptanceTests(){
+  var res = runAcceptanceTests(), html = '', i;
+  for(i = 0; i < res.lines.length; i++){
+    var L = res.lines[i];
+    if(L.group){ html += '<h3>' + L.group + '</h3>'; continue; }
+    html += L.ok
+      ? '<div class="p">  ok   ' + L.name + '  =  ' + L.got + '</div>'
+      : '<div class="f">  FAIL ' + L.name + '  got ' + L.got + ', want ' + L.want + '</div>';
+  }
+  var tally = '<div class="tally ' + (res.fail ? 'bad' : 'ok') + '">' +
+    (res.fail ? res.fail + ' FAILED, ' + res.pass + ' passed' : 'all ' + res.pass + ' checks passed') + '</div>';
+  document.getElementById('testOut').innerHTML = tally + html;
+  document.getElementById('testCard').style.display = '';
+  document.getElementById('app').style.display = 'none';
+  return res;
+}
+if(/[?&]test\b/.test(location.search) || /^#test\b/.test(location.hash)) showAcceptanceTests();
+else initApp();
+</script>
+</body>
+</html>

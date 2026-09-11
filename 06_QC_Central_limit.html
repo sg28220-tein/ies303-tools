@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Central Limit Theorem Dice Experiment</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #2563eb;
+      --accent-dark: #1d4ed8;
+      --soft: #eff6ff;
+      --danger: #dc2626;
+      --ok: #16a34a;
+      --warning: #f59e0b;
+      --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #e0ecff 0, transparent 34%), var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .page {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1d4ed8, #60a5fa);
+      color: white;
+      border-radius: 28px;
+      padding: 34px;
+      box-shadow: var(--shadow);
+      margin-bottom: 22px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::after {
+      content: "";
+      position: absolute;
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      right: -70px;
+      top: -80px;
+    }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 46px);
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      position: relative;
+      z-index: 1;
+    }
+
+    header p {
+      margin: 0;
+      max-width: 860px;
+      color: rgba(255,255,255,0.92);
+      font-size: 17px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .controls {
+      padding: 20px;
+      position: sticky;
+      top: 16px;
+    }
+
+    .controls h2, .panel h2, .mini-card h3, .compare-card h3 {
+      margin: 0 0 12px;
+      letter-spacing: -0.02em;
+    }
+
+    .control-group { margin: 16px 0; }
+
+    label {
+      display: block;
+      font-weight: 750;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      background: white;
+    }
+
+    input[type="number"]:focus {
+      outline: 3px solid #dbeafe;
+      border-color: #93c5fd;
+    }
+
+    .hint {
+      margin: 6px 0 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 13px;
+      font-weight: 800;
+      cursor: pointer;
+      font-size: 14px;
+      transition: transform 0.12s ease, background 0.12s ease, opacity 0.12s ease;
+    }
+
+    button:active { transform: translateY(0); }
+
+    .primary { background: var(--accent); color: white; }
+    .secondary { background: var(--soft); color: var(--accent-dark); }
+    .ghost { background: #f3f4f6; color: #374151; }
+    .danger { background: #fee2e2; color: var(--danger); }
+
+    .presets {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .preset {
+      background: #f9fafb;
+      border: 1px solid var(--line);
+      color: #374151;
+      padding: 10px;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    .preset strong { display: block; font-size: 14px; color: #111827; }
+    .preset span { color: var(--muted); font-weight: 650; }
+
+    .content { display: grid; gap: 20px; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .stat {
+      padding: 16px;
+      border-radius: 16px;
+      background: white;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .stat .label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 850;
+    }
+
+    .stat .value {
+      font-size: 26px;
+      font-weight: 900;
+      margin-top: 4px;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .panel { padding: 20px; }
+
+    .panel-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+
+    .panel-title p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    canvas {
+      width: 100%;
+      display: block;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #ffffff, #fbfdff);
+      border: 1px solid var(--line);
+    }
+
+    #histogram { height: 370px; }
+    .small-histogram { height: 245px; }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .compare-card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #ffffff;
+    }
+
+    .compare-card h3 {
+      font-size: 16px;
+      margin-bottom: 3px;
+    }
+
+    .compare-card p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .preset-editor {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 10px 0 12px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #f9fafb;
+    }
+
+    .preset-editor label {
+      margin-bottom: 5px;
+      font-size: 12px;
+      color: #374151;
+    }
+
+    .preset-editor input[type="number"] {
+      padding: 8px 9px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+
+    .compare-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 0 0 10px;
+    }
+
+    .compare-actions button {
+      padding: 9px 10px;
+      font-size: 12px;
+    }
+
+    .compare-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 0;
+      color: #374151;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .pill {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      padding: 5px 7px;
+      border-radius: 999px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .explain-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .mini-card {
+      padding: 16px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .mini-card h3 { font-size: 17px; }
+    .mini-card p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .formula {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font-weight: 800;
+      text-align: center;
+      font-size: 15px;
+    }
+
+    .dice-area {
+      min-height: 86px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px dashed #bfdbfe;
+      background: #f8fbff;
+      margin-top: 12px;
+    }
+
+    .die {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: white;
+      border: 2px solid #cbd5e1;
+      box-shadow: 0 6px 12px rgba(30, 64, 175, 0.08);
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      color: #1e3a8a;
+      font-size: 19px;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: #4b5563; background: #f9fafb; }
+
+    .table-wrap {
+      max-height: 270px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    .footer-note { margin: 18px 0 0; color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .controls { position: static; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .explain-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 720px) {
+      .comparison-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 540px) {
+      .stats, .input-row { grid-template-columns: 1fr; }
+      header { padding: 24px; }
+      .button-row { grid-template-columns: 1fr; }
+    }
+
+    /* Mouse only: hover effects (on touch screens they stick after a tap) */
+    @media (hover: hover) {
+      button:hover { transform: translateY(-1px); }
+      .primary:hover { background: var(--accent-dark); }
+    }
+
+    /* Touch screens (iPad / iPhone); desktop with a mouse is unaffected */
+    html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+    @media (pointer: coarse) {
+      /* iOS zooms in on any text box under 16px and does not zoom back out */
+      input[type="number"], .preset-editor input[type="number"] { font-size: 16px; }
+      button { min-height: 44px; }
+      .compare-actions button { font-size: 13px; }
+    }
+    @media screen and (max-width: 540px) {
+      .page { width: calc(100% - 24px); padding-top: 16px; }
+      .controls, .panel { padding: 16px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>Central Limit Theorem Dice Experiment</h1>
+      <p>Roll dice repeatedly, calculate sample means, and compare how the distribution of sample means becomes more bell-shaped and narrower as sample size increases.</p>
+    </header>
+
+    <section class="layout">
+      <aside class="card controls">
+        <h2>Custom experiment</h2>
+
+        <div class="input-row">
+          <div class="control-group">
+            <label for="sampleSize">Sample size, n</label>
+            <input id="sampleSize" type="number" min="1" max="500" step="1" value="10" />
+            <p class="hint">Dice rolled per sample mean.</p>
+          </div>
+
+          <div class="control-group">
+            <label for="numSamples">Number of samples</label>
+            <input id="numSamples" type="number" min="1" max="10000" step="1" value="100" />
+            <p class="hint">Sample means generated per run.</p>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label for="sides">Die sides</label>
+          <input id="sides" type="number" min="2" max="50" step="1" value="6" />
+          <p class="hint">Use 6 for the standard classroom dice activity.</p>
+        </div>
+
+        <div class="button-row">
+          <button class="primary" id="runBtn">Run experiment</button>
+          <button class="secondary" id="singleBtn">Roll one sample</button>
+          <button class="ghost" id="csvBtn">Export CSV</button>
+          <button class="danger" id="resetBtn">Reset</button>
+        </div>
+
+        <div class="control-group">
+          <label>Class presets</label>
+          <div class="presets">
+            <button class="preset" data-preset-index="0"><strong>Preset 1</strong><span id="presetButtonLabel0">n = 5, samples = 100</span></button>
+            <button class="preset" data-preset-index="1"><strong>Preset 2</strong><span id="presetButtonLabel1">n = 10, samples = 300</span></button>
+            <button class="preset" data-preset-index="2"><strong>Preset 3</strong><span id="presetButtonLabel2">n = 30, samples = 500</span></button>
+            <button class="preset" data-preset-index="3"><strong>Preset 4</strong><span id="presetButtonLabel3">n = 50, samples = 1,000</span></button>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button class="secondary" id="compareBtn">Regenerate 4 graphs</button>
+          <button class="ghost" id="resetPresetsBtn">Reset presets</button>
+          <button class="ghost" id="printBtn">Print / Save PDF</button>
+        </div>
+
+        <p class="footer-note">Teaching tip: edit the presets live to discuss two patterns: more samples make the histogram smoother; larger n makes the distribution narrower.</p>
+      </aside>
+
+      <section class="content">
+        <div class="stats">
+          <div class="stat">
+            <div class="label">Theoretical mean</div>
+            <div class="value" id="theoryMean">3.50</div>
+          </div>
+          <div class="stat">
+            <div class="label">Expected SE</div>
+            <div class="value" id="theorySE">0.54</div>
+          </div>
+          <div class="stat">
+            <div class="label">Observed mean</div>
+            <div class="value" id="observedMean">-</div>
+          </div>
+          <div class="stat">
+            <div class="label">Observed SD</div>
+            <div class="value" id="observedSD">-</div>
+          </div>
+        </div>
+
+        <section class="card panel">
+          <div class="panel-title">
+            <div>
+              <h2>Custom histogram of sample means</h2>
+              <p>Each bar shows how often a sample mean occurred for the settings you typed.</p>
+            </div>
+          </div>
+          <canvas id="histogram" aria-label="Histogram of sample means"></canvas>
+        </section>
+
+        <section class="card panel">
+          <div class="panel-title">
+            <div>
+              <h2>Four preset graphs for comparison</h2>
+              <p>Edit each preset's sample size and number of samples, then regenerate the graph for classroom comparison.</p>
+            </div>
+          </div>
+          <div class="comparison-grid" id="comparisonGrid">
+            <div class="compare-card">
+              <h3 id="presetTitle0">Preset 1: n = 5, samples = 100</h3>
+              <p>Small sample size. The distribution starts to center around 3.5.</p>
+              <div class="preset-editor">
+                <div>
+                  <label for="presetN0">Sample size, n</label>
+                  <input id="presetN0" class="preset-n" data-preset-index="0" type="number" min="1" max="500" step="1" value="5" />
+                </div>
+                <div>
+                  <label for="presetSamples0">Number of samples</label>
+                  <input id="presetSamples0" class="preset-samples" data-preset-index="0" type="number" min="1" max="10000" step="1" value="100" />
+                </div>
+              </div>
+              <div class="compare-actions">
+                <button class="secondary apply-preset" data-preset-index="0">Use in custom</button>
+                <button class="ghost rerun-preset" data-preset-index="0">Regenerate</button>
+              </div>
+              <canvas class="small-histogram" id="presetCanvas0" aria-label="Preset 1 histogram"></canvas>
+              <div class="compare-stats" id="presetStats0"></div>
+            </div>
+            <div class="compare-card">
+              <h3 id="presetTitle1">Preset 2: n = 10, samples = 300</h3>
+              <p>More samples make the histogram smoother.</p>
+              <div class="preset-editor">
+                <div>
+                  <label for="presetN1">Sample size, n</label>
+                  <input id="presetN1" class="preset-n" data-preset-index="1" type="number" min="1" max="500" step="1" value="10" />
+                </div>
+                <div>
+                  <label for="presetSamples1">Number of samples</label>
+                  <input id="presetSamples1" class="preset-samples" data-preset-index="1" type="number" min="1" max="10000" step="1" value="300" />
+                </div>
+              </div>
+              <div class="compare-actions">
+                <button class="secondary apply-preset" data-preset-index="1">Use in custom</button>
+                <button class="ghost rerun-preset" data-preset-index="1">Regenerate</button>
+              </div>
+              <canvas class="small-histogram" id="presetCanvas1" aria-label="Preset 2 histogram"></canvas>
+              <div class="compare-stats" id="presetStats1"></div>
+            </div>
+            <div class="compare-card">
+              <h3 id="presetTitle2">Preset 3: n = 30, samples = 500</h3>
+              <p>Larger sample size narrows the distribution of sample means.</p>
+              <div class="preset-editor">
+                <div>
+                  <label for="presetN2">Sample size, n</label>
+                  <input id="presetN2" class="preset-n" data-preset-index="2" type="number" min="1" max="500" step="1" value="30" />
+                </div>
+                <div>
+                  <label for="presetSamples2">Number of samples</label>
+                  <input id="presetSamples2" class="preset-samples" data-preset-index="2" type="number" min="1" max="10000" step="1" value="500" />
+                </div>
+              </div>
+              <div class="compare-actions">
+                <button class="secondary apply-preset" data-preset-index="2">Use in custom</button>
+                <button class="ghost rerun-preset" data-preset-index="2">Regenerate</button>
+              </div>
+              <canvas class="small-histogram" id="presetCanvas2" aria-label="Preset 3 histogram"></canvas>
+              <div class="compare-stats" id="presetStats2"></div>
+            </div>
+            <div class="compare-card">
+              <h3 id="presetTitle3">Preset 4: n = 50, samples = 1,000</h3>
+              <p>The distribution becomes smoother and more concentrated near the true mean.</p>
+              <div class="preset-editor">
+                <div>
+                  <label for="presetN3">Sample size, n</label>
+                  <input id="presetN3" class="preset-n" data-preset-index="3" type="number" min="1" max="500" step="1" value="50" />
+                </div>
+                <div>
+                  <label for="presetSamples3">Number of samples</label>
+                  <input id="presetSamples3" class="preset-samples" data-preset-index="3" type="number" min="1" max="10000" step="1" value="1000" />
+                </div>
+              </div>
+              <div class="compare-actions">
+                <button class="secondary apply-preset" data-preset-index="3">Use in custom</button>
+                <button class="ghost rerun-preset" data-preset-index="3">Regenerate</button>
+              </div>
+              <canvas class="small-histogram" id="presetCanvas3" aria-label="Preset 4 histogram"></canvas>
+              <div class="compare-stats" id="presetStats3"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card panel">
+          <div class="panel-title">
+            <div>
+              <h2>Last sample rolled</h2>
+              <p>The values below are one sample. Their average becomes one point in the histogram.</p>
+            </div>
+          </div>
+          <div id="diceArea" class="dice-area"></div>
+        </section>
+
+        <section class="explain-grid">
+          <div class="mini-card">
+            <h3>1. Individual rolls are noisy</h3>
+            <p>A single die roll can be any value from 1 to 6. The original distribution is not bell-shaped.</p>
+          </div>
+          <div class="mini-card">
+            <h3>2. Averages are more stable</h3>
+            <p>When several dice are rolled together, the sample mean is more likely to be near the center.</p>
+            <div class="formula">Sample mean = sum of rolls / n</div>
+          </div>
+          <div class="mini-card">
+            <h3>3. Larger n narrows the distribution</h3>
+            <p>The standard error decreases as sample size increases, so sample means vary less.</p>
+            <div class="formula">SE = σ / √n</div>
+          </div>
+        </section>
+
+        <section class="card panel">
+          <div class="panel-title">
+            <div>
+              <h2>Sample mean table</h2>
+              <p>Most recent sample means generated in the custom experiment.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sample</th>
+                  <th>Sum</th>
+                  <th>Sample mean</th>
+                  <th>Range</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const sampleSizeEl = document.getElementById('sampleSize');
+    const numSamplesEl = document.getElementById('numSamples');
+    const sidesEl = document.getElementById('sides');
+    const theoryMeanEl = document.getElementById('theoryMean');
+    const theorySEEl = document.getElementById('theorySE');
+    const observedMeanEl = document.getElementById('observedMean');
+    const observedSDEl = document.getElementById('observedSD');
+    const diceArea = document.getElementById('diceArea');
+    const tableBody = document.getElementById('tableBody');
+    const canvas = document.getElementById('histogram');
+    const ctx = canvas.getContext('2d');
+
+    const DEFAULT_PRESETS = [
+      { n: 5, samples: 100 },
+      { n: 10, samples: 300 },
+      { n: 30, samples: 500 },
+      { n: 50, samples: 1000 }
+    ];
+
+    let results = [];
+    let lastRolls = [];
+
+    function clampNumber(value, min, max, fallback) {
+      const numericValue = Number(value);
+      if (!Number.isFinite(numericValue)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(numericValue)));
+    }
+
+    function getSettings() {
+      const n = clampNumber(sampleSizeEl.value, 1, 500, 10);
+      const samples = clampNumber(numSamplesEl.value, 1, 10000, 100);
+      const sides = clampNumber(sidesEl.value, 2, 50, 6);
+      sampleSizeEl.value = n;
+      numSamplesEl.value = samples;
+      sidesEl.value = sides;
+      return { n, samples, sides };
+    }
+
+    function dieMean(sides) { return (sides + 1) / 2; }
+    function dieVariance(sides) { return (sides * sides - 1) / 12; }
+    function theoreticalSE(sides, n) { return Math.sqrt(dieVariance(sides) / n); }
+    function randomDie(sides) { return Math.floor(Math.random() * sides) + 1; }
+
+    function rollSample(n, sides) {
+      const rolls = Array.from({ length: n }, () => randomDie(sides));
+      const sum = rolls.reduce((a, b) => a + b, 0);
+      const mean = sum / n;
+      const range = Math.max(...rolls) - Math.min(...rolls);
+      return { rolls, sum, mean, range };
+    }
+
+    function simulate(n, samples, sides) {
+      const simulated = [];
+      for (let i = 0; i < samples; i++) {
+        simulated.push({ index: i + 1, ...rollSample(n, sides) });
+      }
+      return simulated;
+    }
+
+    function mean(values) {
+      if (!values.length) return null;
+      return values.reduce((a, b) => a + b, 0) / values.length;
+    }
+
+    function sampleSD(values) {
+      if (values.length < 2) return null;
+      const m = mean(values);
+      const variance = values.reduce((acc, val) => acc + Math.pow(val - m, 2), 0) / (values.length - 1);
+      return Math.sqrt(variance);
+    }
+
+    function updateTheory() {
+      const { n, sides } = getSettings();
+      theoryMeanEl.textContent = dieMean(sides).toFixed(2);
+      theorySEEl.textContent = theoreticalSE(sides, n).toFixed(2);
+    }
+
+    function runExperiment() {
+      const { n, samples, sides } = getSettings();
+      results = simulate(n, samples, sides);
+      lastRolls = results.length ? results[results.length - 1].rolls : [];
+      renderAll();
+    }
+
+    function rollOneSample() {
+      const { n, sides } = getSettings();
+      const sample = rollSample(n, sides);
+      results.push({ index: results.length + 1, ...sample });
+      lastRolls = sample.rolls;
+      renderAll();
+    }
+
+    function reset() {
+      results = [];
+      lastRolls = [];
+      renderAll();
+    }
+
+    function renderDice() {
+      diceArea.innerHTML = '';
+      if (!lastRolls.length) {
+        diceArea.innerHTML = '<span class="hint">Run the experiment or roll one sample to see dice values here.</span>';
+        return;
+      }
+      lastRolls.slice(0, 80).forEach(value => {
+        const die = document.createElement('div');
+        die.className = 'die';
+        die.textContent = value;
+        diceArea.appendChild(die);
+      });
+      if (lastRolls.length > 80) {
+        const more = document.createElement('span');
+        more.className = 'hint';
+        more.textContent = `+ ${lastRolls.length - 80} more rolls`;
+        diceArea.appendChild(more);
+      }
+    }
+
+    function renderTable() {
+      tableBody.innerHTML = '';
+      const rows = results.slice(-160).reverse();
+      if (!rows.length) {
+        tableBody.innerHTML = '<tr><td colspan="4" style="text-align:left;color:#6b7280;">No samples yet.</td></tr>';
+        return;
+      }
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.index}</td>
+          <td>${row.sum}</td>
+          <td>${row.mean.toFixed(3)}</td>
+          <td>${row.range}</td>
+        `;
+        tableBody.appendChild(tr);
+      });
+    }
+
+    function renderStats() {
+      const means = results.map(r => r.mean);
+      const obsMean = mean(means);
+      const obsSD = sampleSD(means);
+      observedMeanEl.textContent = obsMean === null ? '-' : obsMean.toFixed(2);
+      observedSDEl.textContent = obsSD === null ? '-' : obsSD.toFixed(2);
+    }
+
+    function makeBins(resultRows, n, sides) {
+      const minMean = 1;
+      const maxMean = sides;
+      const binWidth = Math.max(1 / n, 0.02);
+      const binCount = Math.ceil((maxMean - minMean) / binWidth) + 1;
+      const bins = Array.from({ length: binCount }, (_, i) => ({
+        start: minMean + i * binWidth,
+        end: minMean + (i + 1) * binWidth,
+        count: 0
+      }));
+      resultRows.forEach(r => {
+        let idx = Math.round((r.mean - minMean) / binWidth);
+        idx = Math.max(0, Math.min(binCount - 1, idx));
+        bins[idx].count += 1;
+      });
+      return { bins, minMean, maxMean };
+    }
+
+    function drawHistogramOn(canvasEl, resultRows, n, sides, options = {}) {
+      const context = canvasEl.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvasEl.getBoundingClientRect();
+      const cssHeight = options.height || (canvasEl.classList.contains('small-histogram') ? 245 : 370);
+      canvasEl.width = Math.max(300, rect.width) * dpr;
+      canvasEl.height = cssHeight * dpr;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const width = Math.max(300, rect.width);
+      const height = cssHeight;
+      context.clearRect(0, 0, width, height);
+
+      const margin = options.small
+        ? { top: 24, right: 16, bottom: 42, left: 42 }
+        : { top: 30, right: 24, bottom: 54, left: 56 };
+      const plotW = width - margin.left - margin.right;
+      const plotH = height - margin.top - margin.bottom;
+
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, width, height);
+
+      const { bins, minMean, maxMean } = makeBins(resultRows, n, sides);
+      const maxCount = Math.max(1, ...bins.map(b => b.count));
+
+      context.strokeStyle = '#e5e7eb';
+      context.lineWidth = 1;
+      context.fillStyle = '#6b7280';
+      context.font = options.small ? '10px Inter, system-ui, sans-serif' : '12px Inter, system-ui, sans-serif';
+      context.textAlign = 'right';
+      context.textBaseline = 'middle';
+      for (let i = 0; i <= 4; i++) {
+        const y = margin.top + plotH - (i / 4) * plotH;
+        const label = Math.round((i / 4) * maxCount);
+        context.beginPath();
+        context.moveTo(margin.left, y);
+        context.lineTo(margin.left + plotW, y);
+        context.stroke();
+        context.fillText(label, margin.left - 7, y);
+      }
+
+      context.strokeStyle = '#9ca3af';
+      context.beginPath();
+      context.moveTo(margin.left, margin.top);
+      context.lineTo(margin.left, margin.top + plotH);
+      context.lineTo(margin.left + plotW, margin.top + plotH);
+      context.stroke();
+
+      if (!resultRows.length) {
+        context.fillStyle = '#6b7280';
+        context.font = '14px Inter, system-ui, sans-serif';
+        context.textAlign = 'center';
+        context.fillText('Run the experiment to generate a histogram.', width / 2, height / 2);
+        return;
+      }
+
+      const barGap = Math.max(0.5, Math.min(3, plotW / bins.length * 0.12));
+      const barW = Math.max(1, plotW / bins.length - barGap);
+      bins.forEach((bin, i) => {
+        const barH = (bin.count / maxCount) * plotH;
+        const x = margin.left + i * (plotW / bins.length) + barGap / 2;
+        const y = margin.top + plotH - barH;
+        context.fillStyle = '#2563eb';
+        context.fillRect(x, y, barW, barH);
+      });
+
+      const mu = dieMean(sides);
+      const muX = margin.left + ((mu - minMean) / (maxMean - minMean)) * plotW;
+      context.strokeStyle = '#dc2626';
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(muX, margin.top);
+      context.lineTo(muX, margin.top + plotH);
+      context.stroke();
+
+      context.fillStyle = '#dc2626';
+      context.textAlign = 'center';
+      context.textBaseline = 'bottom';
+      context.font = options.small ? '10px Inter, system-ui, sans-serif' : '12px Inter, system-ui, sans-serif';
+      context.fillText('Mean', muX, margin.top - 5);
+
+      context.fillStyle = '#6b7280';
+      context.textBaseline = 'top';
+      context.font = options.small ? '10px Inter, system-ui, sans-serif' : '12px Inter, system-ui, sans-serif';
+      for (let value = 1; value <= sides; value++) {
+        if (sides > 10 && value % 2 === 0) continue;
+        const x = margin.left + ((value - minMean) / (maxMean - minMean)) * plotW;
+        context.textAlign = 'center';
+        context.fillText(String(value), x, margin.top + plotH + 7);
+      }
+      context.font = options.small ? '11px Inter, system-ui, sans-serif' : '13px Inter, system-ui, sans-serif';
+      context.fillStyle = '#374151';
+      context.fillText('Sample mean', margin.left + plotW / 2, height - 21);
+
+      if (!options.small) {
+        context.save();
+        context.translate(16, margin.top + plotH / 2);
+        context.rotate(-Math.PI / 2);
+        context.textAlign = 'center';
+        context.fillText('Frequency', 0, 0);
+        context.restore();
+      }
+    }
+
+    function drawCustomHistogram() {
+      const { n, sides } = getSettings();
+      drawHistogramOn(canvas, results, n, sides, { height: 370, small: false });
+    }
+
+    function getPresetSettings(index) {
+      const nEl = document.getElementById(`presetN${index}`);
+      const samplesEl = document.getElementById(`presetSamples${index}`);
+      const n = clampNumber(nEl.value, 1, 500, DEFAULT_PRESETS[index].n);
+      const samples = clampNumber(samplesEl.value, 1, 10000, DEFAULT_PRESETS[index].samples);
+      nEl.value = n;
+      samplesEl.value = samples;
+      return { n, samples };
+    }
+
+    function updatePresetLabels(index, n, samples) {
+      const formattedSamples = samples.toLocaleString();
+      document.getElementById(`presetTitle${index}`).textContent = `Preset ${index + 1}: n = ${n}, samples = ${formattedSamples}`;
+      document.getElementById(`presetButtonLabel${index}`).textContent = `n = ${n}, samples = ${formattedSamples}`;
+    }
+
+    function renderSinglePreset(index) {
+      const sides = clampNumber(sidesEl.value, 2, 50, 6);
+      const { n, samples } = getPresetSettings(index);
+      updatePresetLabels(index, n, samples);
+      const presetResults = simulate(n, samples, sides);
+      const presetCanvas = document.getElementById(`presetCanvas${index}`);
+      const presetStats = document.getElementById(`presetStats${index}`);
+      drawHistogramOn(presetCanvas, presetResults, n, sides, { height: 245, small: true });
+      const means = presetResults.map(r => r.mean);
+      presetStats.innerHTML = `
+        <span class="pill">Observed mean: ${mean(means).toFixed(2)}</span>
+        <span class="pill">Observed SD: ${sampleSD(means).toFixed(2)}</span>
+        <span class="pill">Expected SE: ${theoreticalSE(sides, n).toFixed(2)}</span>
+      `;
+    }
+
+    function renderPresetComparison() {
+      for (let index = 0; index < DEFAULT_PRESETS.length; index++) {
+        renderSinglePreset(index);
+      }
+    }
+
+    function resetPresetInputs() {
+      DEFAULT_PRESETS.forEach((preset, index) => {
+        document.getElementById(`presetN${index}`).value = preset.n;
+        document.getElementById(`presetSamples${index}`).value = preset.samples;
+      });
+      renderPresetComparison();
+    }
+
+    function applyPresetToCustom(index) {
+      const { n, samples } = getPresetSettings(index);
+      sampleSizeEl.value = n;
+      numSamplesEl.value = samples;
+      updateTheory();
+      runExperiment();
+    }
+
+    function exportCSV() {
+      if (!results.length) {
+        /* said on the button rather than with alert(): pop-up boxes may be blocked
+           when the file is opened on an iPad/iPhone */
+        const b = document.getElementById('csvBtn');
+        if (!b.dataset.label) b.dataset.label = b.textContent;
+        b.textContent = 'No data yet — run first';
+        clearTimeout(b._restore);
+        b._restore = setTimeout(() => { b.textContent = b.dataset.label; }, 2500);
+        return;
+      }
+      const header = ['sample','sum','sample_mean','range','rolls'];
+      const lines = [header.join(',')];
+      results.forEach(r => {
+        lines.push([r.index, r.sum, r.mean.toFixed(6), r.range, `"${r.rolls.join(' ')}"`].join(','));
+      });
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'clt_dice_experiment.csv';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    function renderAll() {
+      updateTheory();
+      renderStats();
+      renderDice();
+      renderTable();
+      drawCustomHistogram();
+    }
+
+    [sampleSizeEl, numSamplesEl, sidesEl].forEach(el => {
+      el.addEventListener('change', () => {
+        updateTheory();
+        drawCustomHistogram();
+      });
+    });
+
+    document.getElementById('runBtn').addEventListener('click', runExperiment);
+    document.getElementById('singleBtn').addEventListener('click', rollOneSample);
+    document.getElementById('resetBtn').addEventListener('click', reset);
+    document.getElementById('csvBtn').addEventListener('click', exportCSV);
+    document.getElementById('compareBtn').addEventListener('click', renderPresetComparison);
+    document.getElementById('resetPresetsBtn').addEventListener('click', resetPresetInputs);
+    document.getElementById('printBtn').addEventListener('click', () => window.print());
+
+    document.querySelectorAll('.preset-n, .preset-samples').forEach(input => {
+      input.addEventListener('change', () => {
+        renderSinglePreset(Number(input.dataset.presetIndex));
+      });
+    });
+
+    document.querySelectorAll('.rerun-preset').forEach(btn => {
+      btn.addEventListener('click', () => renderSinglePreset(Number(btn.dataset.presetIndex)));
+    });
+
+    document.querySelectorAll('.apply-preset').forEach(btn => {
+      btn.addEventListener('click', () => applyPresetToCustom(Number(btn.dataset.presetIndex)));
+    });
+
+    document.querySelectorAll('.preset').forEach(btn => {
+      btn.addEventListener('click', () => applyPresetToCustom(Number(btn.dataset.presetIndex)));
+    });
+
+    /* Redraw only when the width changes. iPads and phones fire resize whenever the
+       address bar slides away during scrolling, and this redraw re-rolls the four
+       preset graphs — they would change under the student's finger. */
+    let lastWidth = window.innerWidth;
+    window.addEventListener('resize', () => {
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      drawCustomHistogram();
+      renderPresetComparison();
+    });
+
+    renderAll();
+    renderPresetComparison();
+  </script>
+</body>
+</html>

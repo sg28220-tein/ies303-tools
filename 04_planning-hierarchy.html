@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Planning Hierarchy — One Forecast, Three Decisions</title>
+<!--
+  Planning-hierarchy explainer — IES 303 Operations Management (SIIT), Lecture 04 Capacity Planning.
+  Standalone page: open directly in any browser, no server, no network, no external assets.
+  Projector-driven: lecturer plays the cascade, clicks a tier to expand its detail, discusses.
+  Moving version of Lecture 04 slide 3 "The Planning Hierarchy"; numbers picked up from slide 4
+  "From Forecast to Capacity". All figures derive from the single DATA block in the script below.
+  Nothing here is graded, optimised, or student-entered.
+-->
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --tier-long:#2563eb; --tier-mid:#9333ea; --tier-short:#0d9488;
+    --over:#dc2626; --over-soft:#fca5a5; --ok:#16a34a; --ok-soft:#f0fdf4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);background:#fafafa;font-size:16px;line-height:1.5}
+  .wrap{max-width:1200px;margin:0 auto;padding:24px 20px 60px}
+  header h1{margin:0;font-size:32px;font-weight:700}
+  header .sub{margin:4px 0 20px;color:var(--muted);font-size:17px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 10px;font-size:20px}
+  .cardHead{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+  .cardHead h2{margin:0}
+  .spacer{flex:1}
+  button{font:inherit;font-size:16px;font-weight:600;padding:9px 16px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:disabled{opacity:.45;cursor:default}
+  .hint{color:var(--muted);font-size:14px}
+
+  /* ---------- cascade ---------- */
+  .cascade{display:flex;gap:20px;align-items:stretch}
+
+  /* left rail — the argument of the whole page: you commit most where you know least */
+  .rail{width:180px;flex:none;display:flex;gap:14px}
+  .railCol{flex:1;display:flex;flex-direction:column;text-align:center}
+  .railCol .rTitle{font-size:13.5px;font-weight:700;margin-bottom:5px;line-height:1.25}
+  .railCol .rEnd{font-size:12.5px;color:var(--muted);line-height:1.25;min-height:32px;display:flex;align-items:center;justify-content:center}
+  .railCol .rBar{flex:1;min-height:120px;margin:5px 0}
+  .rBar.err{background:linear-gradient(#64748b,#cbd5e1);clip-path:polygon(2% 0%,98% 0%,68% 100%,32% 100%)}
+  .rBar.rev{background:linear-gradient(#cbd5e1,#64748b);clip-path:polygon(32% 0%,68% 0%,98% 100%,2% 100%)}
+
+  /* tier column */
+  .tiers{flex:1;display:flex;flex-direction:column;min-width:0}
+
+  .tier{display:grid;grid-template-columns:296px minmax(0,1fr) 232px;gap:18px;align-items:center;
+        background:#fff;border:1px solid var(--line);border-left:4px solid var(--tc);border-radius:12px;
+        padding:14px 18px;cursor:pointer;opacity:.35;filter:saturate(.15);
+        transition:opacity .5s ease,filter .5s ease,box-shadow .2s ease}
+  .tier.on{opacity:1;filter:none}
+  .tier.sel{box-shadow:0 0 0 2px var(--tc) inset,0 2px 10px rgba(0,0,0,.09)}
+  .tier .tName{font-size:22px;font-weight:700;line-height:1.2;color:var(--tc)}
+  .tier .tMeta{font-size:14.5px;color:var(--muted);margin-top:6px;line-height:1.45}
+  .tier .tMeta b{color:var(--ink);font-weight:600}
+  .tier .tNum{text-align:right}
+  .tier .tBig{font-size:44px;font-weight:800;line-height:1;letter-spacing:-.01em;font-variant-numeric:tabular-nums;color:var(--tc)}
+  .tier .tBig.bad{color:var(--over)}
+  .tier .tCap{font-size:14.5px;color:var(--muted);margin-top:6px;line-height:1.35}
+  .tier .tCap b{color:var(--over);font-weight:700}
+  .tier .tViz{min-width:0}
+  .tier svg{display:block;width:100%;height:auto}
+
+  /* the annual forecast chip */
+  .chipLane{height:46px;display:flex;justify-content:center;align-items:flex-start;pointer-events:none;transition:opacity .3s ease}
+  .chip{display:inline-flex;align-items:center;gap:9px;background:var(--accent-soft);border:1px solid var(--tier-long);
+        color:var(--tier-long);font-weight:700;font-size:17px;padding:7px 16px;border-radius:999px;
+        transition:transform .9s cubic-bezier(.4,0,.6,1),opacity .9s ease}
+  .chip .cSub{font-weight:600;color:var(--muted);font-size:14.5px}
+  .chipLane.dropped .chip{transform:translateY(58px) scale(.72);opacity:0}
+  .chipLane.hidden{opacity:0}
+
+  /* connecting arrows */
+  .arrow{display:flex;align-items:center;gap:14px;padding-left:130px;height:52px}
+  .arrow svg{flex:none;overflow:visible}
+  .arrow .arw{transform:scaleY(0);transform-origin:12px 0;transition:transform .6s ease}
+  .arrow.on .arw{transform:scaleY(1)}
+  .arrow .tag{font-size:14.5px;font-weight:600;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+              border-radius:999px;padding:5px 13px;opacity:0;transform:translateX(-8px);
+              transition:opacity .45s ease .25s,transform .45s ease .25s}
+  .arrow .tag b{color:var(--ink)}
+  .arrow.on .tag{opacity:1;transform:none}
+
+  /* chart pieces */
+  .bar{transform-box:fill-box;transform-origin:bottom;transform:scaleY(0);transition:transform .55s cubic-bezier(.2,.8,.2,1)}
+  .grown .bar{transform:scaleY(1)}
+  .capWrap{transform:scaleX(0);transition:transform .7s ease}
+  .capOn .capWrap{transform:scaleX(1)}
+  .capTxt{opacity:0;transition:opacity .4s ease .5s}
+  .capOn .capTxt{opacity:1}
+  .xlab{font-size:11px;fill:var(--muted);font-family:"Segoe UI",system-ui,sans-serif}
+  .xlab.hi{fill:var(--ink);font-weight:700}
+  .vlab{font-size:11.5px;font-weight:700;font-family:"Segoe UI",system-ui,sans-serif}
+  @keyframes pulseRed{0%,100%{opacity:1}45%{opacity:.18}}
+  .pulse .over{animation:pulseRed .75s ease 2}
+
+  /* ---------- tier detail ---------- */
+  #detailCard{display:none;border-left:4px solid var(--tc)}
+  #detailCard.show{display:block}
+  #detailCard h2{color:var(--tc);font-size:22px}
+  .fields{display:grid;grid-template-columns:186px 1fr;gap:11px 20px;align-items:start;margin-top:6px}
+  .fields .fk{font-size:14px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-top:3px}
+  .fields .fv{font-size:16.5px}
+  .fields .fv em{font-style:normal;color:var(--tc);font-weight:700}
+  .handsDown{background:#f8fafc;border:1px solid var(--line);border-left:3px solid var(--tc);border-radius:10px;padding:9px 14px}
+  table.exT{border-collapse:collapse;font-size:15.5px;margin:2px 0 4px}
+  table.exT th{background:#f8fafc;color:var(--muted);font-size:14px;font-weight:600;padding:6px 14px;border:1px solid var(--line);text-align:right;white-space:nowrap}
+  table.exT td{padding:5px 14px;border:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  table.exT th:first-child,table.exT td:first-child{text-align:left}
+  table.exT tr.tot td{font-weight:700;background:#f8fafc}
+  table.exT tr.hi td{background:var(--accent-soft)}
+  table.exT td.bad{color:var(--over);font-weight:700}
+  table.exT td.good{color:var(--ok);font-weight:700}
+  .arrowNote{font-size:16.5px;margin:8px 0 2px;line-height:1.5}
+  .arrowNote b{font-size:17.5px}
+
+  /* ---------- summary ---------- */
+  table.sumT{border-collapse:collapse;width:100%;font-size:16px;table-layout:fixed}
+  table.sumT th,table.sumT td{border:1px solid var(--line);padding:9px 14px;vertical-align:top;text-align:left}
+  table.sumT thead th{font-size:18px;font-weight:700;color:#fff;text-align:center}
+  table.sumT thead th:first-child{background:#fff;border-color:#fff}
+  table.sumT th.rk{width:190px;font-size:14px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;background:#f8fafc}
+  table.sumT tr.punch td{font-weight:700;font-size:16.5px}
+  table.sumT tr.punch th.rk{color:var(--ink)}
+
+  .caption{margin-top:16px;min-height:58px;display:flex;align-items:center;
+           background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 18px;
+           font-size:18.5px;line-height:1.4;transition:background .4s ease,border-color .4s ease}
+  .caption.final{background:var(--accent-soft);border-color:var(--accent);font-weight:600;font-size:20px}
+  .caption .cText{opacity:0;transition:opacity .35s ease}
+  .caption .cText.in{opacity:1}
+
+  footer{color:var(--muted);font-size:13.5px;margin-top:26px;line-height:1.65}
+  footer b{color:var(--ink)}
+
+  /* ---------- mouse only: hover effects (on touch screens they stick after a tap) ---------- */
+  @media (hover:hover){
+    button:hover{background:#f3f4f6}
+    button.primary:hover{background:#1d4ed8}
+    .tier.on:hover{box-shadow:0 2px 10px rgba(0,0,0,.09)}
+  }
+
+  /* ---------- touch screens (iPad / iPhone); desktop with a mouse is unaffected ---------- */
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+  @media (pointer:coarse){
+    button{min-height:44px}
+  }
+
+  /* ---------- tablets: each tier puts its name and number on top, the chart full width below ---------- */
+  .sumWrap{overflow-x:auto}
+  @media screen and (max-width:1000px){
+    .tier{grid-template-columns:minmax(0,1fr) minmax(0,220px);grid-template-areas:"name num" "viz viz";gap:10px 16px}
+    .tier > div:first-child{grid-area:name}
+    .tier .tNum{grid-area:num}
+    .tier .tViz{grid-area:viz}
+    .tier .tViz svg{max-width:560px;margin:0 auto}
+    .arrow{padding-left:40px}
+    table.exT{display:block;max-width:100%;overflow-x:auto}
+  }
+
+  /* ---------- phones: rail becomes a strip above the tiers, tiers stack in one column ---------- */
+  @media screen and (max-width:640px){
+    .wrap{padding:16px 12px 48px}
+    .card{padding:14px 12px;border-radius:12px}
+    header h1{font-size:26px}
+    header .sub{font-size:15px}
+    .cascade{flex-direction:column;gap:12px}
+    .rail{width:auto}
+    .railCol .rBar{min-height:70px}
+    .tier{grid-template-columns:minmax(0,1fr);grid-template-areas:"name" "num" "viz";padding:12px}
+    .tier .tNum{text-align:left}
+    .tier .tName{font-size:19px}
+    .tier .tBig{font-size:34px}
+    .arrow{padding-left:16px;height:auto;min-height:52px}
+    .fields{grid-template-columns:minmax(0,1fr);gap:2px 0}
+    .fields .fv{margin-bottom:10px}
+    table.sumT{min-width:600px}
+    table.sumT th.rk{width:130px}
+    .caption{font-size:16px}
+    .caption.final{font-size:17px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>The Planning Hierarchy</h1>
+    <p class="sub">One forecast, three decisions — IES 303 Lecture 04</p>
+  </header>
+
+  <!-- ============ CARD 1 — the cascade ============ -->
+  <section class="card">
+    <div class="cardHead">
+      <h2>The cascade</h2>
+      <span class="hint">click any level to open its detail</span>
+      <span class="spacer"></span>
+      <button class="primary" id="btnPlay">Play the cascade &#9654;</button>
+      <button id="btnReset">Reset</button>
+    </div>
+
+    <div class="cascade">
+      <!-- left rail -->
+      <div class="rail">
+        <div class="railCol">
+          <div class="rTitle">Forecast<br>error</div>
+          <div class="rEnd">&plusmn;14%<br>(MAPE)</div>
+          <div class="rBar err"></div>
+          <div class="rEnd">mostly firm<br>orders</div>
+        </div>
+        <div class="railCol">
+          <div class="rTitle">Reversibility</div>
+          <div class="rEnd">locked<br>for years</div>
+          <div class="rBar rev"></div>
+          <div class="rEnd">changeable<br>this week</div>
+        </div>
+      </div>
+
+      <!-- right: three tiers -->
+      <div class="tiers">
+        <div class="chipLane" id="chipLane">
+          <div class="chip"><span id="chipNum">24,350 units</span><span class="cSub">2026 forecast</span></div>
+        </div>
+
+        <div class="tier" id="tier1" data-tier="1" style="--tc:var(--tier-long)">
+          <div>
+            <div class="tName">Long range<br>Capacity planning</div>
+            <div class="tMeta">Horizon <b>&gt; 1 year</b> &middot; bucket <b>year</b><br>unit of decision <b>product family</b></div>
+          </div>
+          <div class="tViz" id="viz1"></div>
+          <div class="tNum">
+            <div class="tBig" id="num1">0</div>
+            <div class="tCap" id="cap1">production lines</div>
+          </div>
+        </div>
+
+        <div class="arrow" id="arr1">
+          <svg width="24" height="46" viewBox="0 0 24 46"><g class="arw">
+            <line x1="12" y1="0" x2="12" y2="33" stroke="#9ca3af" stroke-width="2.5"/>
+            <polygon points="5,31 19,31 12,44" fill="#9ca3af"/>
+          </g></svg>
+          <span class="tag" id="tag1"></span>
+        </div>
+
+        <div class="tier" id="tier2" data-tier="2" style="--tc:var(--tier-mid)">
+          <div>
+            <div class="tName">Intermediate<br>Aggregate plan (S&amp;OP)</div>
+            <div class="tMeta">Horizon <b>3&ndash;18 months</b> &middot; bucket <b>month</b><br>unit of decision <b>aggregate units</b></div>
+          </div>
+          <div class="tViz" id="viz2"></div>
+          <div class="tNum">
+            <div class="tBig" id="num2">0</div>
+            <div class="tCap" id="cap2">hours needed</div>
+          </div>
+        </div>
+
+        <div class="arrow" id="arr2">
+          <svg width="24" height="46" viewBox="0 0 24 46"><g class="arw">
+            <line x1="12" y1="0" x2="12" y2="33" stroke="#9ca3af" stroke-width="2.5"/>
+            <polygon points="5,31 19,31 12,44" fill="#9ca3af"/>
+          </g></svg>
+          <span class="tag" id="tag2"></span>
+        </div>
+
+        <div class="tier" id="tier3" data-tier="3" style="--tc:var(--tier-short)">
+          <div>
+            <div class="tName">Short range<br>Master Production Schedule</div>
+            <div class="tMeta">Horizon <b>6&ndash;12 weeks</b> &middot; bucket <b>week</b><br>unit of decision <b>specific end items</b></div>
+          </div>
+          <div class="tViz" id="viz3"></div>
+          <div class="tNum">
+            <div class="tBig" id="num3">0</div>
+            <div class="tCap" id="cap3">hours needed each week</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="caption" id="caption"><span class="cText" id="captionText"></span></div>
+  </section>
+
+  <!-- ============ CARD 2 — tier detail ============ -->
+  <section class="card" id="detailCard">
+    <h2 id="dTitle"></h2>
+    <div class="fields" id="dFields"></div>
+  </section>
+
+  <!-- ============ CARD 3 — summary ============ -->
+  <section class="card">
+    <h2>What changes as you go down</h2>
+    <div class="sumWrap"><table class="sumT" id="sumT"></table></div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script id="dataScript">
+/* =====================================================================
+   SINGLE SOURCE OF TRUTH
+   All figures trace to 02_ev_data.xlsx — 36 monthly observations,
+   Jan 2023 (t = 1) to Dec 2025 (t = 36). 2026 is t = 37 ... 48.
+   Nothing on this page is typed in twice: every displayed number is
+   computed from this block.
+   ===================================================================== */
+const DATA = {
+  trend:        {a:201.45, b:43.01},   // y = a + b*t   (Lecture 02, linear trend)
+  lastT:        36,                    // t of Dec 2025
+  year:         2026,
+  annualRounded:24350,                 // teaching value; sum of trend(37..48) = 24,352.5
+
+  // Illustrative model split and assembly times, chosen to total the annual forecast.
+  mix: [
+    {name:'SUV',    units: 8000, hrs:0.30, fill:'#0d9488'},
+    {name:'Sedan',  units:11000, hrs:0.20, fill:'#2dd4bf'},
+    {name:'Pickup', units: 5350, hrs:0.25, fill:'#99f6e4'}
+  ],
+
+  hoursPerLine: 2000,                  // one production line, one year
+  weeksPerYear: 50,                    // working weeks
+
+  // Seasonal relatives computed from the 36-month series (Lecture 02).
+  si: [1.088,1.086,1.379,0.999,1.028,0.926,0.897,0.958,0.974,0.969,0.970,1.164],
+  monthNames:['January','February','March','April','May','June',
+              'July','August','September','October','November','December'],
+  monthShort:['J','F','M','A','M','J','J','A','S','O','N','D'],
+
+  peakIdx:  2,                         // March — the month that cannot be built
+  slackIdx: 6,                         // July  — the month with room to spare
+  weeksInPeak: 4
+};
+
+/* ---------- derived model (pure, unit-testable) ---------- */
+function buildModel(d){
+  const mixUnits = d.mix.reduce((s,m)=>s+m.units,0);
+  const mixHours = d.mix.reduce((s,m)=>s+m.units*m.hrs,0);
+  const linesRaw = mixHours/d.hoursPerLine;
+  const lines    = Math.ceil(linesRaw);
+  const capYear  = lines*d.hoursPerLine;
+  const capMonth = capYear/12;
+  const capWeek  = capYear/d.weeksPerYear;
+  const hrPerUnit= mixHours/mixUnits;
+
+  const months = d.si.map((si,i)=>{
+    const t      = d.lastT + i + 1;
+    const trend  = d.trend.a + d.trend.b*t;
+    const demand = trend*si;
+    const hours  = demand*hrPerUnit;
+    return {i, name:d.monthNames[i], short:d.monthShort[i], t, trend, si, demand, hours,
+            gap: capMonth - hours, over: hours > capMonth};
+  });
+  const yearDemand = months.reduce((s,m)=>s+m.demand,0);
+  const yearHours  = months.reduce((s,m)=>s+m.hours,0);
+
+  // Peak month broken into weeks; model mix held at the annual ratio.
+  const peak      = months[d.peakIdx];
+  const unitsWeek = Math.round(peak.demand/d.weeksInPeak);
+  const split     = d.mix.map(m=>({...m, qty:Math.round(unitsWeek*m.units/mixUnits)}));
+  const drift     = unitsWeek - split.reduce((s,m)=>s+m.qty,0);
+  if(drift){                                   // any rounding residue goes to the biggest model
+    const big = split.reduce((a,b)=>b.qty>a.qty?b:a);
+    big.qty += drift;
+  }
+  split.forEach(m=>m.hours = m.qty*m.hrs);
+  const weekHours = split.reduce((s,m)=>s+m.hours,0);
+
+  return {mixUnits, mixHours, linesRaw, lines, capYear, capMonth, capWeek, hrPerUnit,
+          months, yearDemand, yearHours, peak, slack: months[d.slackIdx],
+          // March has the strongest seasonal index, but the trend keeps rising, so the
+          // heaviest month of 2026 is not March. Both facts are put on screen.
+          worst: months.reduce((a,b)=>b.hours>a.hours?b:a),
+          overCount: months.filter(m=>m.over).length,
+          unitsWeek, split, weekHours, weekGap: capWeek - weekHours};
+}
+const M = buildModel(DATA);
+
+/* ---------- formatting ---------- */
+const n0 = n => Math.round(n).toLocaleString('en-US');
+const n1 = n => n.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+const n2 = n => n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const n3 = n => n.toLocaleString('en-US',{minimumFractionDigits:3,maximumFractionDigits:3});
+</script>
+
+<script id="chartScript">
+/* =====================================================================
+   Hand-built inline SVG — no chart library, no external request.
+   Every chart uses the SAME vertical scale rule: the capacity ceiling
+   always sits at CAP_FRAC of the plot height, so the dashed rule reads
+   as one constraint carried down the page even though the number on it
+   changes (6,000 h/yr -> 500 h/mo -> 120 h/wk).
+   ===================================================================== */
+const VB_W=380, VB_H=132, PADL=34, PADR=10, PADT=16, PADB=18;
+const PLOT_W = VB_W-PADL-PADR, PLOT_H = VB_H-PADT-PADB;
+const CAP_FRAC = 0.60;                       // ceiling height as a share of the plot
+const CAP_Y = PADT + PLOT_H*(1-CAP_FRAC);
+
+const yOf = (v,max) => PADT + PLOT_H - (v/max)*PLOT_H;
+const hOf = (v,max) => (v/max)*PLOT_H;
+
+function baseline(){
+  return `<line x1="${PADL}" y1="${PADT+PLOT_H}" x2="${PADL+PLOT_W}" y2="${PADT+PLOT_H}" stroke="var(--line)" stroke-width="1.5"/>`;
+}
+function ceilingSVG(label){
+  return `<g class="capWrap" style="transform-origin:${PADL}px ${CAP_Y}px">
+            <line x1="${PADL}" y1="${CAP_Y}" x2="${PADL+PLOT_W}" y2="${CAP_Y}"
+                  stroke="var(--over)" stroke-width="2" stroke-dasharray="7 5"/>
+          </g>
+          <text class="capTxt vlab" x="${PADL+PLOT_W}" y="${CAP_Y-5}" text-anchor="end"
+                fill="var(--over)">${label}</text>`;
+}
+
+/* Tier 1 — what the year needs, against what three lines give you. */
+function viz1(){
+  const max = M.capYear/CAP_FRAC;
+  const bw = 76, x1 = PADL+30, x2 = PADL+30+bw+56;
+  const segH = hOf(DATA.hoursPerLine,max);
+  let seg = '';
+  for(let k=0;k<M.lines;k++){                                  // one block per production line
+    seg += `<rect x="${x2}" y="${yOf(M.capYear,max)+k*segH+1}" width="${bw}" height="${segH-2}"
+                  rx="2" fill="var(--tier-long)" opacity="${(0.45+0.2*k).toFixed(2)}"/>`;
+  }
+  return `<svg viewBox="0 0 ${VB_W} ${VB_H}" role="img" aria-label="Annual hours needed against capacity built">
+    ${baseline()}
+    <g class="bar"><rect x="${x1}" y="${yOf(M.mixHours,max)}" width="${bw}" height="${hOf(M.mixHours,max)}" rx="3" fill="#93c5fd"/></g>
+    <g class="bar" style="transition-delay:180ms">${seg}</g>
+    <text class="xlab" x="${x1+bw/2}" y="${VB_H-5}" text-anchor="middle">needed ${n0(M.mixHours)} h</text>
+    <text class="xlab hi" x="${x2+bw/2}" y="${VB_H-5}" text-anchor="middle">built ${M.lines} &times; ${n0(DATA.hoursPerLine)} h</text>
+    ${ceilingSVG(n0(M.capYear)+' h/yr')}
+  </svg>`;
+}
+
+/* Tier 2 — twelve months against the monthly ceiling. */
+function viz2(){
+  const max = M.capMonth/CAP_FRAC;
+  const slot = PLOT_W/12, bw = Math.min(20, slot-7);
+  let bars='', labs='';
+  M.months.forEach((m,i)=>{
+    const x = PADL + slot*i + (slot-bw)/2;
+    const h = hOf(m.hours,max), y = yOf(m.hours,max);
+    const hi = (i===DATA.peakIdx || i===DATA.slackIdx);
+    const fill = m.over ? 'var(--over-soft)' : (i===DATA.slackIdx ? 'var(--ok)' : '#c4b5fd');
+    bars += `<g class="bar" style="transition-delay:${i*55}ms">`
+          + `<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="2" fill="${fill}"/>`;
+    if(m.over){                                              // the slice that cannot be built
+      bars += `<rect class="over" x="${x}" y="${y}" width="${bw}" height="${CAP_Y-y}" rx="2" fill="var(--over)"/>`;
+    }
+    bars += `</g>`;
+    labs += `<text class="xlab${hi?' hi':''}" x="${x+bw/2}" y="${VB_H-5}" text-anchor="middle">${m.short}</text>`;
+  });
+  return `<svg viewBox="0 0 ${VB_W} ${VB_H}" role="img" aria-label="Monthly hours needed against the monthly ceiling">
+    ${baseline()}${bars}${labs}
+    ${ceilingSVG(n0(M.capMonth)+' h/mo')}
+  </svg>`;
+}
+
+/* Tier 3 — the peak month's four weeks, each split by model. */
+function viz3(){
+  const max = M.capWeek/CAP_FRAC;
+  const slot = PLOT_W/DATA.weeksInPeak, bw = Math.min(52, slot-16);
+  let g='', labs='';
+  for(let w=0; w<DATA.weeksInPeak; w++){
+    const x = PADL + slot*w + (slot-bw)/2;
+    let acc = 0, segs = '';
+    M.split.forEach(m=>{                                     // stacked model segments
+      const h = hOf(m.hours,max);
+      segs += `<rect x="${x}" y="${PADT+PLOT_H-acc-h}" width="${bw}" height="${Math.max(0,h-1)}" rx="1.5" fill="${m.fill}"/>`;
+      acc += h;
+    });
+    const top = PADT+PLOT_H-acc;
+    g += `<g class="bar" style="transition-delay:${w*110}ms">${segs}`
+       + `<rect class="over" x="${x}" y="${top}" width="${bw}" height="${CAP_Y-top}" fill="var(--over)" opacity=".82" rx="1.5"/>`
+       + `<rect x="${x}" y="${top}" width="${bw}" height="${acc}" rx="1.5" fill="none" stroke="var(--over)" stroke-width="1.5"/>`
+       + `</g>`;
+    labs += `<text class="xlab hi" x="${x+bw/2}" y="${VB_H-5}" text-anchor="middle">W${w+1}</text>`;
+  }
+  const key = M.split.map((m,i)=>
+    `<rect x="${PADL+i*74}" y="1" width="9" height="9" rx="2" fill="${m.fill}"/>`
+   +`<text class="xlab" x="${PADL+i*74+13}" y="9.5">${m.name}</text>`).join('');
+  return `<svg viewBox="0 0 ${VB_W} ${VB_H}" role="img" aria-label="Four weeks of the peak month by model against the weekly ceiling">
+    ${key}${baseline()}${g}${labs}
+    ${ceilingSVG(n0(M.capWeek)+' h/wk')}
+  </svg>`;
+}
+</script>
+
+<script id="contentScript">
+/* =====================================================================
+   Card 2 content. The same five fields for all three tiers, so students
+   can read straight down and compare like with like.
+   ===================================================================== */
+const PEAK = M.peak, SLACK = M.slack;
+
+const mixRows = DATA.mix.map(m=>
+  `<tr><td>${m.name}</td><td>${n0(m.units)}</td><td>${n2(m.hrs)}</td><td>${n1(m.units*m.hrs)}</td></tr>`).join('');
+
+const monthRows = M.months.map(m=>{
+  const hi = (m.i===DATA.peakIdx||m.i===DATA.slackIdx) ? ' class="hi"' : '';
+  const gap = m.over ? `<td class="bad">${n0(-m.gap)} h short</td>`
+                     : `<td class="good">${n0(m.gap)} h spare</td>`;
+  return `<tr${hi}><td>${m.name}</td><td>${n0(m.trend)}</td><td>${n3(m.si)}</td>`
+       + `<td>${n0(m.demand)}</td><td>${n0(m.hours)}</td>${gap}</tr>`;
+}).join('');
+
+const weekRows = Array.from({length:DATA.weeksInPeak},(_,w)=>
+  `<tr><td>Week ${w+1}</td>${M.split.map(m=>`<td>${n0(m.qty)}</td>`).join('')}`
+ + `<td>${n0(M.unitsWeek)}</td><td>${n1(M.weekHours)}</td>`
+ + `<td class="bad">${n0(-M.weekGap)} h over</td></tr>`).join('');
+
+const TIERS = {
+  1:{
+    name:'Long range — Capacity planning', colour:'var(--tier-long)',
+    question:'How much capacity do we build?',
+    forecast:`Annual total from the linear trend, <em>y = ${n2(DATA.trend.a)} + ${n2(DATA.trend.b)}t</em>,
+              summed over t = ${DATA.lastT+1}&ndash;${DATA.lastT+12} &rarr; <em>${n0(DATA.annualRounded)} units</em> for ${DATA.year}.
+              <span class="hint">(Lecture 02, linear trend)</span>`,
+    decides:'Number of production lines, facility size, major equipment. Money committed now, capacity you live with for a decade.',
+    example:`<table class="exT">
+        <tr><th>Model</th><th>Units (${DATA.year})</th><th>h / unit</th><th>Hours</th></tr>
+        ${mixRows}
+        <tr class="tot"><td>Total</td><td>${n0(M.mixUnits)}</td><td></td><td>${n1(M.mixHours)}</td></tr>
+      </table>
+      <div class="arrowNote">${n1(M.mixHours)} h &divide; ${n0(DATA.hoursPerLine)} h per line =
+        <b>${n2(M.linesRaw)}</b> &rarr; round up &rarr; <b>${M.lines} production lines</b></div>`,
+    hands:`<b>${M.lines} lines = ${n0(M.capYear)} h/year = ${n0(M.capMonth)} h/month = ${n0(M.capWeek)} h/week.</b>
+           Fixed. Not negotiable below this line.`
+  },
+  2:{
+    name:'Intermediate — Aggregate plan (S&OP)', colour:'var(--tier-mid)',
+    question:'Given fixed capacity, how much do we produce each month?',
+    forecast:`Monthly demand = <em>trend &times; seasonal relative</em>.
+              <span class="hint">(Lecture 02, seasonal relatives)</span>`,
+    decides:'Monthly production rate, workforce level, overtime, inventory build-up, subcontracting. Everything except the building itself.',
+    example:`<table class="exT">
+        <tr><th>Month</th><th>Trend</th><th>SI</th><th>Demand</th><th>Hours</th><th>vs ${n0(M.capMonth)} h</th></tr>
+        ${monthRows}
+      </table>
+      <div class="arrowNote">${PEAK.name} carries the strongest seasonal index (${n3(PEAK.si)}) and needs
+        <b>${n0(PEAK.hours)} h</b> against ${n0(M.capMonth)} h &mdash; ${n0(-PEAK.gap)} h short.
+        ${SLACK.name} needs only ${n0(SLACK.hours)} h &mdash; ${n0(SLACK.gap)} h spare.
+        Note that the heaviest month is not the most seasonal one: the trend keeps rising all year, so
+        <b>${M.worst.name}</b> ends up worst of all at ${n0(M.worst.hours)} h (${n0(-M.worst.gap)} h short),
+        and ${M.overCount} of the twelve months breach the ceiling.
+        Across the year, ${n0(M.yearHours)} h of work against ${n0(M.capYear)} h built:
+        <b>close to balance as a year, nowhere near it as twelve months.</b></div>`,
+    hands:`An agreed monthly production quantity &mdash; <b>${n0(PEAK.demand)} units for ${PEAK.name}</b>,
+           part of it built early in the slack months and carried as inventory.`
+  },
+  3:{
+    name:'Short range — Master Production Schedule', colour:'var(--tier-short)',
+    question:'Which specific vehicles do we build in which week?',
+    forecast:`Weekly &mdash; firm orders near-term, forecast further out.
+              <span class="hint">(Lecture 02, na&iuml;ve / moving average)</span>`,
+    decides:'End-item quantities per week. This is the input to MRP, and then to scheduling and sequencing.',
+    example:`<table class="exT">
+        <tr><th>${PEAK.name}</th>${DATA.mix.map(m=>`<th>${m.name}</th>`).join('')}
+            <th>Units</th><th>Hours</th><th>vs ${n0(M.capWeek)} h</th></tr>
+        ${weekRows}
+        <tr class="tot"><td>Total</td>${M.split.map(m=>`<td>${n0(m.qty*DATA.weeksInPeak)}</td>`).join('')}
+            <td>${n0(M.unitsWeek*DATA.weeksInPeak)}</td><td>${n1(M.weekHours*DATA.weeksInPeak)}</td><td></td></tr>
+      </table>
+      <div class="arrowNote">Mix held at the annual ratio
+        (${DATA.mix.map(m=>`${m.name} ${(100*m.units/M.mixUnits).toFixed(1)}%`).join(' &middot; ')}).
+        Whole vehicles only, so the four weeks total ${n0(M.unitsWeek*DATA.weeksInPeak)} against the
+        ${n0(PEAK.demand)} planned &mdash; that difference is a rounding, not a decision.</div>`,
+    hands:`Component and material requirements, via the bill of materials &mdash; <b>Lectures 07&ndash;09</b>
+           (inventory, scheduling, sequencing).`
+  }
+};
+
+const SUMMARY = [
+  ['Horizon',              '&gt; 1 year',
+                           '3&ndash;18 months',
+                           '6&ndash;12 weeks'],
+  ['Time bucket',          'Year',
+                           'Month',
+                           'Week'],
+  ['Unit of decision',     'Product family',
+                           'Aggregate units &mdash; all vehicles together',
+                           'Specific end items &mdash; SUV, Sedan, Pickup'],
+  ['Forecast method',      'Linear trend over 36 months',
+                           'Trend &times; seasonal relative',
+                           'Firm orders, then na&iuml;ve / moving average'],
+  ['What can still change','Almost nothing &mdash; buildings, lines and major equipment are committed',
+                           'Workforce level, overtime, inventory build-up, subcontracting',
+                           'Which model, which week, in what order'],
+  ['Cost of being wrong',  'Build the wrong factory',
+                           'Carry the wrong inventory',
+                           'Reschedule next week']
+];
+</script>
+
+<script id="uiScript">
+/* =====================================================================
+   Render, then the cascade animation.
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+
+$('viz1').innerHTML = viz1();
+$('viz2').innerHTML = viz2();
+$('viz3').innerHTML = viz3();
+$('chipNum').textContent = n0(DATA.annualRounded)+' units';
+$('tag1').innerHTML = `capacity now fixed: <b>${n0(M.capYear)} h/year</b>`;
+$('tag2').innerHTML = `${PEAK.name} plan: <b>${n0(PEAK.demand)} units</b>`;
+
+(function summary(){
+  const cols = [['var(--tier-long)','Long range'],['var(--tier-mid)','Intermediate'],['var(--tier-short)','Short range']];
+  let h = `<thead><tr><th></th>${cols.map(c=>`<th style="background:${c[0]}">${c[1]}</th>`).join('')}</tr></thead><tbody>`;
+  SUMMARY.forEach((r,i)=>{
+    const punch = (i===SUMMARY.length-1) ? ' class="punch"' : '';
+    h += `<tr${punch}><th class="rk">${r[0]}</th>${r.slice(1).map(c=>`<td>${c}</td>`).join('')}</tr>`;
+  });
+  $('sumT').innerHTML = h + '</tbody>';
+})();
+
+$('foot').innerHTML =
+  `<b>Where the numbers come from.</b> Everything on this page derives from the 36-month series in
+   02_ev_data.xlsx (Jan 2023 &ndash; Dec 2025) and is recomputed in the page, not typed in.
+   The seasonal relatives are computed from that actual series; the three-model split and the per-unit
+   assembly times (${DATA.mix.map(m=>n2(m.hrs)+' h').join(' / ')}) are <b>illustrative teaching values</b>
+   chosen to total ${n0(DATA.annualRounded)} units.
+   Capacity convention: one line = ${n0(DATA.hoursPerLine)} h/year, the year taken as 12 months and
+   ${DATA.weeksPerYear} working weeks, so ${n0(M.capYear)} h/yr = ${n0(M.capMonth)} h/mo = ${n0(M.capWeek)} h/wk.
+   The seasonal relatives sum to ${n2(DATA.si.reduce((a,b)=>a+b,0))} rather than 12.00, so the twelve months
+   total ${n0(M.yearHours)} h against ${n0(M.capYear)} h built &mdash; the year is close to balance, not exactly on it.
+   <br>Planning-hierarchy explainer &middot; IES 303 Operations Management &middot; SIIT &middot; Lecture 04`;
+
+/* ---------- number count-up ---------- */
+function stopCount(el){
+  if(el._raf){ cancelAnimationFrame(el._raf); el._raf = null; }
+  if(el._fin){ clearTimeout(el._fin); el._fin = null; }
+}
+function countTo(el, to, dur, fmt){
+  stopCount(el);
+  const t0 = performance.now();
+  const land = () => { stopCount(el); el.textContent = fmt(to); };
+  // Safety net: rAF is throttled in a background tab, so if the lecturer switches
+  // away mid-play the number would otherwise stay frozen at zero.
+  el._fin = setTimeout(land, dur+150);
+  (function tick(now){
+    const p = Math.min(1,(now-t0)/dur);
+    if(p>=1){ land(); return; }
+    el.textContent = fmt(to*(1-Math.pow(1-p,3)));      // ease-out
+    el._raf = requestAnimationFrame(tick);
+  })(t0);
+}
+
+/* ---------- caption ---------- */
+const CAPTIONS = {
+  0:'',
+  1:'Annual forecast → how much capacity to build.',
+  2:'Annual forecast → how much capacity to build.',
+  3:`One year becomes twelve months. The year is close to balance; ${M.overCount} of the months are nowhere near it.`,
+  4:`One year becomes twelve months. The year is close to balance; ${M.overCount} of the months are nowhere near it.`,
+  5:`One month becomes four weeks and three models. Every week of ${PEAK.name} is over.`,
+  6:'Sized for the average year, the busiest months cannot be built. That gap is what aggregate planning exists to close.'
+};
+let lastCaption = null;
+function setCaption(s){
+  const txt = CAPTIONS[s] || '';
+  $('caption').classList.toggle('final', s>=6);
+  if(txt === lastCaption) return;
+  lastCaption = txt;
+  const el = $('captionText');
+  el.classList.remove('in');
+  setTimeout(()=>{ el.textContent = txt; if(txt) el.classList.add('in'); }, 180);
+}
+
+/* ---------- state machine: step 0 ... 6 ---------- */
+let step = -1, timers = [], playing = false;
+const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
+function applyStep(s){
+  step = s;
+
+  $('chipLane').classList.toggle('dropped', s>=1);
+  $('chipLane').classList.toggle('hidden',  s>=2);
+
+  $('tier1').classList.toggle('on', s>=1);
+  $('tier2').classList.toggle('on', s>=3);
+  $('tier3').classList.toggle('on', s>=5);
+  $('arr1').classList.toggle('on', s>=2);
+  $('arr2').classList.toggle('on', s>=4);
+
+  $('viz1').classList.toggle('grown', s>=1);
+  $('viz2').classList.toggle('grown', s>=3);
+  $('viz3').classList.toggle('grown', s>=5);
+
+  // the ceiling is drawn last, top to bottom, as one continuous argument
+  ['viz1','viz2','viz3'].forEach(id => $(id).classList.toggle('capOn', s>=6));
+
+  if(s>=1){
+    countTo($('num1'), M.lines, 900, v=>String(Math.round(v)));
+    $('cap1').innerHTML = `production lines<br>${n1(M.mixHours)} h needed &divide; ${n0(DATA.hoursPerLine)} h`;
+  } else { stopCount($('num1')); $('num1').textContent='0'; $('cap1').innerHTML='production lines'; }
+
+  if(s>=3){
+    countTo($('num2'), PEAK.hours, 1100, v=>n0(v)+' h');
+    $('num2').classList.add('bad');
+    $('cap2').innerHTML = `needed in ${PEAK.name} &middot; ${n0(M.capMonth)} h available<br><b>${n0(-PEAK.gap)} h short</b>`;
+  } else {
+    stopCount($('num2')); $('num2').textContent='0'; $('num2').classList.remove('bad');
+    $('cap2').innerHTML='hours needed in '+PEAK.name;
+  }
+
+  if(s>=5){
+    countTo($('num3'), M.weekHours, 1100, v=>n0(v)+' h');
+    $('num3').classList.add('bad');
+    $('cap3').innerHTML = `needed each week &middot; ${n0(M.capWeek)} h available<br><b>${n0(-M.weekGap)} h over, every week</b>`;
+  } else {
+    stopCount($('num3')); $('num3').textContent='0'; $('num3').classList.remove('bad');
+    $('cap3').innerHTML='hours needed each week';
+  }
+
+  const casc = document.querySelector('.cascade');
+  casc.classList.remove('pulse');
+  if(s>=6){ void casc.offsetWidth; casc.classList.add('pulse'); }   // reflow so it replays
+
+  setCaption(s);
+}
+
+function play(){
+  clearTimers();
+  playing = true;
+  $('btnPlay').disabled = true;
+  closeDetail();
+  applyStep(0);
+  // total ~9 s, then it holds on the final state
+  [[1,120],[2,1620],[3,2620],[4,4620],[5,5620],[6,7620]]
+    .forEach(([s,ms]) => timers.push(setTimeout(()=>applyStep(s), ms)));
+  timers.push(setTimeout(()=>{ playing=false; $('btnPlay').disabled=false; }, 9120));
+}
+
+function reset(){
+  clearTimers(); playing = false;
+  $('btnPlay').disabled = false;
+  closeDetail();
+  applyStep(0);
+}
+
+function finish(){                                   // skip straight to the held final state
+  clearTimers(); playing = false;
+  $('btnPlay').disabled = false;
+  if(step < 6) applyStep(6);
+}
+
+/* ---------- tier detail accordion (one open at a time) ---------- */
+let openTier = null;
+function closeDetail(){
+  openTier = null;
+  $('detailCard').classList.remove('show');
+  [1,2,3].forEach(i=>$('tier'+i).classList.remove('sel'));
+}
+function openDetail(k){
+  if(openTier === k){ closeDetail(); return; }
+  const T = TIERS[k];
+  openTier = k;
+  [1,2,3].forEach(i=>$('tier'+i).classList.toggle('sel', i===k));
+  const card = $('detailCard');
+  card.style.setProperty('--tc', T.colour);
+  $('dTitle').textContent = T.name;
+  $('dFields').innerHTML =
+    `<div class="fk">The question</div><div class="fv"><b>${T.question}</b></div>
+     <div class="fk">Forecast it uses</div><div class="fv">${T.forecast}</div>
+     <div class="fk">What it decides</div><div class="fv">${T.decides}</div>
+     <div class="fk">Worked example</div><div class="fv">${T.example}</div>
+     <div class="fk">Hands down</div><div class="fv handsDown">${T.hands}</div>`;
+  card.classList.add('show');
+}
+
+[1,2,3].forEach(k=>{
+  $('tier'+k).addEventListener('click', ()=>{
+    finish();                                        // any click skips the rest of the cascade
+    openDetail(k);
+  });
+});
+$('btnPlay').addEventListener('click', play);
+$('btnReset').addEventListener('click', reset);
+
+applyStep(0);
+</script>
+
+<script id="checkScript">
+/* =====================================================================
+   Self-check. Recomputes every displayed figure independently of the
+   render path and compares it against the Lecture 04 spec. Open the
+   console (F12) before a lecture; it is silent when all agree.
+   ===================================================================== */
+(function checks(){
+  const fails = [], oks = [];
+  const T = (label, got, want, tol) => {
+    (Math.abs(got-want) <= (tol===undefined?0.5:tol) ? oks : fails).push({label, got, want});
+  };
+
+  // Tier 1
+  T('sum of trend(37..48)', Array.from({length:12},(_,i)=>DATA.trend.a+DATA.trend.b*(37+i)).reduce((a,b)=>a+b,0), 24352.5, 0.6);
+  T('mix units total', M.mixUnits, 24350, 0);
+  T('mix hours total', M.mixHours, 5937.5, 0.01);
+  T('lines (raw)', M.linesRaw, 2.96875, 1e-6);
+  T('lines (rounded up)', M.lines, 3, 0);
+  T('capacity / year', M.capYear, 6000, 0);
+  T('capacity / month', M.capMonth, 500, 0);
+  T('capacity / week', M.capWeek, 120, 0);
+  T('hours per unit', M.hrPerUnit, 0.2439, 5e-4);
+
+  // Tier 2
+  T('March trend', M.peak.trend, 1879, 0.5);
+  T('March demand', M.peak.demand, 2590, 1.5);
+  T('March hours', M.peak.hours, 632, 1);
+  T('March shortfall', -M.peak.gap, 132, 1);
+  T('July trend', M.slack.trend, 2051, 0.5);
+  T('July demand', M.slack.demand, 1840, 1.5);
+  T('July hours', M.slack.hours, 449, 1);
+  T('July surplus', M.slack.gap, 51, 1);
+
+  // Tier 3
+  T('March units / week', M.unitsWeek, 648, 0);
+  T('SUV / week',    M.split[0].qty, 213, 0);
+  T('Sedan / week',  M.split[1].qty, 293, 0);
+  T('Pickup / week', M.split[2].qty, 142, 0);
+  T('week units add up', M.split.reduce((s,m)=>s+m.qty,0), M.unitsWeek, 0);
+  T('week hours', M.weekHours, 158, 0.05);
+  T('week overrun', -M.weekGap, 38, 0.05);
+
+  if(fails.length){
+    console.warn('Planning hierarchy — figures disagree with the Lecture 04 spec:');
+    console.table(fails);
+  } else {
+    console.log('Planning hierarchy — all '+oks.length+' figures agree with the Lecture 04 spec.');
+  }
+
+  // Known, deliberate imprecision — surfaced rather than hidden.
+  const siSum = DATA.si.reduce((a,b)=>a+b,0);
+  console.log('note: seasonal relatives sum to '+siSum.toFixed(3)+' (12.000 would make the year balance exactly); '
+    +'the twelve months total '+Math.round(M.yearHours)+' h against '+M.capYear+' h built.');
+})();
+</script>
+</body>
+</html>

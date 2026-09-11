@@ -1,0 +1,2341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control Charts — IES 303</title>
+<!--
+  Control chart teaching tool — IES 303 Engineering Management (SIIT), Lecture 06.
+  Standalone page: open directly in any browser, no server needed.
+
+  Tab 1  X-bar & R      — build both charts from sample data (sigma known or unknown)
+  Tab 2  p & c charts   — attribute data, with the z <-> alpha conversion the deck uses
+  Tab 3  Simulator      — live sampling; Type I false alarms and Type II misses as counts
+  Tab 4  Capability     — Cp / Cpk against specification limits
+
+  Built for projecting in class: every result is shown as soon as the inputs change.
+
+  All preset data comes from the Lecture 06 deck so the tool reproduces the
+  worked examples exactly.
+
+  Add ?test (or #test) to the URL to run the acceptance checks in the console.
+-->
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --ok:#16a34a;     --ok-soft:#f0fdf4;
+    --warn:#d97706;   --warn-soft:#fffbeb;
+    --bad:#dc2626;    --bad-soft:#fef2f2;
+    --grid:#eef1f4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);
+       background:#fafafa;font-size:16px;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px}
+  header h1{margin:0;font-size:29px;font-weight:700}
+  header .sub{margin:4px 0 20px;color:var(--muted)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;
+        margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 10px;font-size:19px}
+  .card h3{margin:18px 0 6px;font-size:16px;color:var(--muted);text-transform:uppercase;
+           letter-spacing:.04em;font-weight:700}
+  .hidden{display:none !important}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:none;border-radius:0;padding:8px 14px;background:#fff;font-weight:600}
+  .seg button.on{background:var(--accent);color:#fff}
+  .hint{color:var(--muted);font-size:13.5px}
+  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:10px 0}
+  label.fld{display:flex;align-items:center;gap:7px;font-weight:600;font-size:15px}
+  select,input[type=text],input[type=number],textarea{font:inherit;padding:6px 9px;
+        border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  input[type=number]{width:92px;text-align:center}
+  input[type=range]{width:190px;accent-color:var(--accent)}
+  button{font:inherit;font-weight:600;padding:8px 15px;border:1px solid var(--line);border-radius:10px;
+         background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+
+  .tabbar{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;
+          margin-bottom:18px;background:#fff}
+  .tabbar button{flex:1;border:none;border-radius:0;padding:13px 10px;background:#fff;font-weight:700;
+                 font-size:15.5px;border-right:1px solid var(--line);line-height:1.25}
+  .tabbar button:last-child{border-right:none}
+  .tabbar button .tn{display:block;font-size:12px;font-weight:600;color:var(--muted)}
+  .tabbar button.on{background:var(--accent);color:#fff}
+  .tabbar button.on .tn{color:#dbeafe}
+
+  table.dataT{border-collapse:collapse;font-size:15.5px;margin:10px 0}
+  table.dataT th{background:#f8fafc;color:var(--muted);font-size:13px;padding:7px 12px;
+                 border:1px solid var(--line);white-space:nowrap}
+  table.dataT td{padding:5px 12px;border:1px solid var(--line);text-align:right;
+                 font-variant-numeric:tabular-nums}
+  table.dataT td.jb{text-align:left;font-weight:700;white-space:nowrap;color:var(--muted)}
+  table.dataT td.out{background:var(--bad-soft);color:var(--bad);font-weight:800}
+  table.dataT input{width:76px;font:inherit;font-size:15px;text-align:center;
+                    border:1.5px solid var(--line);border-radius:7px;padding:4px 3px}
+  table.dataT input:focus{border-color:var(--accent);outline:none}
+  .scrollX{overflow-x:auto}
+
+  .explain{background:var(--accent-soft);border-radius:10px;padding:13px 18px;margin:12px 0;font-size:16px}
+  .explain b{color:var(--accent)}
+  .explain code{font-family:Consolas,"Courier New",monospace;font-size:15.5px;background:#fff;
+                padding:1px 5px;border-radius:5px}
+  .verdict{border-radius:10px;padding:12px 18px;margin:12px 0;font-weight:700;font-size:16.5px}
+  .verdict.inCtl{background:var(--ok-soft);color:var(--ok);border:1px solid #bbf7d0}
+  .verdict.outCtl{background:var(--bad-soft);color:var(--bad);border:1px solid #fecaca}
+
+  .stats{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+  .stat{border:1px solid var(--line);border-radius:11px;padding:10px 16px;background:#fff;min-width:126px}
+  .stat .k{font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+  .stat .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat.good .v{color:var(--ok)} .stat.bad .v{color:var(--bad)} .stat.warnS .v{color:var(--warn)}
+
+  /* the step-by-step working: each line is one substitution */
+  ol.work{margin:8px 0 4px;padding-left:26px}
+  ol.work li{margin:5px 0;line-height:1.55}
+  ol.work .ex{font-family:Consolas,"Courier New",monospace;font-size:15.5px}
+  ol.work b{color:var(--accent)}
+  ol.work .note{color:var(--muted);font-size:14px}
+
+  /* interpretation: the questions students answer from the chart */
+  .qs{margin:6px 0 0;padding-left:22px}
+  .qs li{margin:7px 0}
+  .qs li b{color:var(--ink)}
+  .pattern{border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:12px 0;background:#fff}
+  .pattern .ttl{font-weight:700;margin-bottom:6px}
+  .pattern.flag{border-color:#fecaca;background:var(--bad-soft)}
+  .pattern.calm{border-color:#bbf7d0;background:var(--ok-soft)}
+
+  .chartBox{border:1px solid var(--line);border-radius:12px;background:#fff;padding:8px 6px 2px;margin:12px 0}
+  .chartBox svg{display:block;width:100%;height:auto}
+  .cap{font-size:13.5px;color:var(--muted);padding:0 10px 8px}
+
+  /* mouse only: hover effects (on touch screens they stick after a tap) */
+  @media (hover:hover){
+    button:hover{background:#f3f4f6}
+    button.primary:hover{background:#1d4ed8}
+    button.danger:hover{background:#b91c1c}
+  }
+
+  /* touch screens (iPad / iPhone); desktop with a mouse is unaffected */
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+  @media (pointer:coarse){
+    /* iOS zooms in on any text box under 16px and does not zoom back out */
+    input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea{font-size:16px}
+    button, select{min-height:44px}
+    input[type=radio], input[type=checkbox]{width:22px;height:22px}
+    input[type=range]{height:32px}
+  }
+
+  /* phones */
+  @media screen and (max-width:640px){
+    .wrap{padding:16px 12px 48px}
+    .card{padding:16px 12px;border-radius:12px}
+    header h1{font-size:24px}
+    select{max-width:100%}
+    label.fld{flex-wrap:wrap;max-width:100%}
+    label.fld select{min-width:0}
+    /* six tabs do not fit in one row: three per row */
+    .tabbar{flex-wrap:wrap}
+    .tabbar button{flex:1 1 33%;padding:9px 4px;font-size:14px;border-bottom:1px solid var(--line)}
+    table.dataT th, table.dataT td{padding:5px 8px}
+    table.dataT input{width:64px}
+    /* keep chart labels readable: scroll sideways rather than shrink to under half */
+    .chartBox{overflow-x:auto}
+    .chartBox svg{min-width:600px}
+    .stat{min-width:0;flex:1 1 130px}
+    .explain, .verdict{padding:12px 14px}
+    input[type=range]{width:100%;max-width:260px}
+  }
+
+  @media print{
+    body{background:#fff} .tabbar,.noprint{display:none !important}
+    .card{break-inside:avoid;box-shadow:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Control Charts</h1>
+  <p class="sub">IES 303 Engineering Management &middot; Lecture 06 Quality Control</p>
+</header>
+
+<div class="row noprint">
+  <span class="hint">View</span>
+  <span class="seg" id="viewSeg">
+    <button data-view="lecture" class="on">Lecture</button>
+    <button data-view="activity">Activity</button>
+  </span>
+  <span class="hint" id="viewNote">Everything, including the live simulator.</span>
+  <span style="flex:1"></span>
+  <button class="noprint" onclick="window.print()">Print / Save PDF</button>
+</div>
+
+<p class="hint activityOnly hidden" id="activityIntro">
+  Enter your data, read the chart, then answer the questions under it. The working is shown
+  so you can follow how each limit was obtained — you do not need to compute them by hand.
+</p>
+
+<div class="tabbar noprint" id="tabbar">
+  <button data-tab="start" class="on">Start here<span class="tn">your data</span></button>
+  <button data-tab="xbar">x&#772; &amp; R chart<span class="tn">measured data</span></button>
+  <button data-tab="attr">p &amp; c chart<span class="tn">counted data</span></button>
+  <button data-tab="run">Run test<span class="tn">patterns</span></button>
+  <button data-tab="cap">Capability<span class="tn">Cp and Cpk</span></button>
+  <button data-tab="sim">Simulator<span class="tn">Type I / Type II</span></button>
+</div>
+
+<!-- ===================== TAB 0 : START HERE ===================== -->
+<section id="tab-start">
+  <div class="card">
+    <h2>1. Your data</h2>
+    <p class="hint">Paste it from the handout or a spreadsheet — tabs, commas, spaces or new
+      lines all work. One row per sample.</p>
+    <textarea id="stData" rows="7" style="width:100%" placeholder="0.438  0.344  0.373  0.415  0.359&#10;0.402  0.371  0.398  0.362  0.392&#10;..."></textarea>
+    <div class="row">
+      <button class="primary" id="stRead">Read this data</button>
+      <label class="fld">Rows are
+        <select id="stOrient">
+          <option value="samples">samples (one row per sample)</option>
+          <option value="obs">observations (one column per sample)</option>
+        </select>
+      </label>
+      <span class="hint" id="stShape"></span>
+    </div>
+    <div class="scrollX"><div id="stGrid"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>2. What are these numbers?</h2>
+    <p class="hint">This is your decision, and it decides the chart. Nothing here checks it for
+      you before you plot.</p>
+    <div class="row">
+      <label class="fld"><input type="radio" name="stKind" value="measured" checked>
+        A measured value — millilitres, millimetres, minutes</label>
+    </div>
+    <div class="row">
+      <label class="fld"><input type="radio" name="stKind" value="p">
+        Items that passed or failed — the count of defectives out of n inspected</label>
+      <label class="fld" id="stNFld">n =<input type="number" id="stN" min="1" value="100"></label>
+    </div>
+    <div class="row">
+      <label class="fld"><input type="radio" name="stKind" value="c">
+        Faults counted on one unit — several are possible on the same unit</label>
+    </div>
+    <div class="row">
+      <label class="fld">z =<input type="number" id="stZ" step="0.01" value="3"></label>
+      <span class="hint">Three-sigma limits are the industry standard. The tabled A&#8322;, D&#8323;
+        and D&#8324; assume z = 3.</span>
+    </div>
+    <div class="row">
+      <button class="primary" id="stPlot">Plot it</button>
+      <button id="stPreset">Load an example instead</button>
+    </div>
+    <div id="stWarn"></div>
+  </div>
+</section>
+
+<!-- ===================== TAB 1 : X-BAR & R ===================== -->
+<section id="tab-xbar" class="hidden">
+  <div class="card">
+    <h2>Sample data</h2>
+    <div class="row">
+      <label class="fld">Preset
+        <select id="xbPreset">
+          <option value="input">Your data from Start here</option>
+          <option value="deck">Deck example — 12.11 mm, n=4, k=5</option>
+          <option value="bank">Individual Assignment 1 — bank processing times</option>
+          <option value="bottle">Bottle filling — 500 ml line</option>
+          <option value="caseA">Group case — Line A (Ghent chlorate, mg/L)</option>
+          <option value="caseB">Group case — Line B (Ghent chlorate, mg/L)</option>
+          <option value="caseC">Group case — Line C (Ghent chlorate, mg/L)</option>
+          <option value="caseD">Group case — Line D (Ghent chlorate, mg/L)</option>
+          <option value="caseE">Group case — Line E (Ghent chlorate, mg/L)</option>
+          <option value="caseF">Group case — Line F (Ghent chlorate, mg/L)</option>
+          <option value="blank">Empty grid</option>
+        </select>
+      </label>
+      <label class="fld">Samples (k)<input type="number" id="xbK" min="2" max="12" value="5"></label>
+      <label class="fld">Observations (n)<input type="number" id="xbN" min="2" max="10" value="4"></label>
+      <button id="xbResize">Resize grid</button>
+    </div>
+    <div class="row">
+      <label class="fld">Limits from
+        <select id="xbMethod">
+          <option value="range">sample range (&sigma; unknown, uses A&#8322;)</option>
+          <option value="sigma">known process &sigma;</option>
+        </select>
+      </label>
+      <label class="fld" id="xbSigmaFld">&sigma; =<input type="number" id="xbSigma" step="0.001" value="0.02"></label>
+      <label class="fld">z =<input type="number" id="xbZ" step="0.01" value="3"></label>
+      <span class="hint" id="xbZNote"></span>
+    </div>
+    <div class="scrollX"><div id="xbGrid"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>Sample means and ranges</h2>
+    <div class="scrollX"><div id="xbSummary"></div></div>
+    <div id="xbWarn"></div>
+    <div id="xbResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>How the limits were obtained</h2>
+    <div id="xbWork"></div>
+  </div>
+
+  <div class="card" id="xbCharts">
+    <h2>Charts</h2>
+    <div class="chartBox"><div id="xbChartMean"></div><div class="cap" id="xbCapMean"></div></div>
+    <div class="chartBox"><div id="xbChartRange"></div><div class="cap" id="xbCapRange"></div></div>
+    <div class="explain lectureOnly">
+      <b>Reading the pair.</b> The mean chart is sensitive to a shift in the process centre;
+      the range chart is sensitive to a change in spread. A process can pass one and fail the
+      other, so both are read together before declaring the process in control.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Reading the chart</h2>
+    <div id="xbPattern"></div>
+    <ol class="qs">
+      <li><b>Is any sample outside its limits?</b> Name the sample and say which limit it broke.</li>
+      <li><b>Which chart raised it?</b> A signal on the mean chart alone points to the process
+        centre moving. A signal on the range chart points to the spread changing — often a
+        different cause and a different fix.</li>
+      <li><b>Do the points inside the limits look random?</b> Drift, a run on one side, or a
+        saw-tooth pattern is a signal even when nothing crosses a limit. The pattern check
+        above tests exactly that.</li>
+      <li><b>In control is not the same as acceptable.</b> If the process is stable, is it
+        centred where you want it, and is the spread small enough for the specification?</li>
+      <li><b>What would you check on the line</b> before calling this an assignable cause —
+        the operator, the material batch, the measuring device, the machine setting?</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== TAB 2 : ATTRIBUTES ===================== -->
+<section id="tab-attr" class="hidden">
+  <div class="card">
+    <h2>Attribute data</h2>
+    <div class="row">
+      <label class="fld">Chart
+        <select id="atType">
+          <option value="p">p-chart — proportion defective</option>
+          <option value="c">c-chart — defects per unit</option>
+        </select>
+      </label>
+      <label class="fld">Preset
+        <select id="atPreset"></select>
+      </label>
+      <label class="fld" id="atNFld">Sample size n<input type="number" id="atN" min="1" value="100"></label>
+    </div>
+    <div class="row">
+      <span class="hint">Counts, separated by spaces or commas</span>
+    </div>
+    <textarea id="atData" rows="3" style="width:100%"></textarea>
+    <div class="row">
+      <label class="fld">Set limits by
+        <select id="atBy">
+          <option value="z">z value</option>
+          <option value="alpha">&alpha; risk</option>
+          <option value="pct">% of chance variation</option>
+        </select>
+      </label>
+      <label class="fld" id="atZFld">z =<input type="number" id="atZ" step="0.01" value="3"></label>
+      <label class="fld hidden" id="atAlphaFld">&alpha; =<input type="number" id="atAlpha" step="0.001" value="0.03"></label>
+      <label class="fld hidden" id="atPctFld">% =<input type="number" id="atPct" step="0.01" value="99.74"></label>
+      <button class="primary" id="atRun">Build chart</button>
+    </div>
+    <div class="explain" id="atZNote"></div>
+  </div>
+
+  <div class="card">
+    <div id="atWarn"></div>
+    <div id="atResult"></div>
+    <div class="chartBox"><div id="atChart"></div><div class="cap" id="atCap"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>How the limits were obtained</h2>
+    <div id="atWork"></div>
+  </div>
+
+  <div class="card">
+    <h2>Reading the chart</h2>
+    <div id="atPattern"></div>
+    <ol class="qs">
+      <li><b>Which samples, if any, sit outside the limits?</b> With counted data one bad
+        sample can be a genuine signal or an unusually large batch — which is it here?</li>
+      <li><b>What does a lower limit of zero mean?</b> When the computed LCL is negative it is
+        reported as 0, so the chart cannot flag a process that suddenly looks too good. Is that
+        a problem worth knowing about?</li>
+      <li><b>Is there a trend or a step</b> even inside the limits — the last few samples all
+        above the centre line, or a jump partway through the series?</li>
+      <li><b>Would a different &alpha; change your answer?</b> Re-set the limits by &alpha; risk
+        instead of z and see whether the same points still signal.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== TAB : RUN TEST ===================== -->
+<section id="tab-run" class="hidden">
+  <div class="card">
+    <h2>The series being tested</h2>
+    <p class="hint" id="rtSource"></p>
+    <textarea id="rtData" rows="3" style="width:100%"></textarea>
+    <div class="row">
+      <label class="fld">Median
+        <select id="rtMedMode">
+          <option value="auto">computed from the data</option>
+          <option value="manual">set by hand</option>
+        </select>
+      </label>
+      <label class="fld hidden" id="rtMedFld">value<input type="number" id="rtMedVal" step="0.001"></label>
+      <label class="fld">Critical z<input type="number" id="rtZcrit" step="0.1" value="2"></label>
+      <label class="fld">A/B tie
+        <select id="rtTieAB">
+          <option value="drop">drop the point</option>
+          <option value="A">count as above</option>
+          <option value="B">count as below</option>
+        </select>
+      </label>
+      <label class="fld">U/D tie
+        <select id="rtTieUD">
+          <option value="drop">drop the point</option>
+          <option value="U">count as up</option>
+          <option value="D">count as down</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Marking the series</h2>
+    <p class="hint">A run is an unbroken stretch of the same letter. The heavy left border marks
+      where a run starts.</p>
+    <div class="scrollX"><div id="rtTable"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>Test results</h2>
+    <div class="twoCol">
+      <div>
+        <h3 style="margin:0 0 4px;font-size:16px">Above / below the median</h3>
+        <div class="stats" id="rtStatsAB"></div>
+        <div class="explain" id="rtExplAB"></div>
+      </div>
+      <div>
+        <h3 style="margin:0 0 4px;font-size:16px">Up / down</h3>
+        <div class="stats" id="rtStatsUD"></div>
+        <div class="explain" id="rtExplUD"></div>
+      </div>
+    </div>
+    <div id="rtVerdict"></div>
+  </div>
+
+  <div class="card lectureOnly">
+    <h2>Does the tie rule change the answer?</h2>
+    <p class="hint">Every convention applied to the same data. Ties are common in count data and
+      rare in measurements, so this matters most on p and c charts.</p>
+    <div class="scrollX"><div id="rtTieTable"></div></div>
+  </div>
+</section>
+
+<!-- ===================== TAB 3 : SIMULATOR ===================== -->
+<section id="tab-sim" class="hidden">
+  <div class="card">
+    <h2>Live process</h2>
+    <p class="hint">Limits are fixed at the target mean. Move the true mean away from target and
+      watch how long the chart takes to notice.</p>
+    <div class="row">
+      <label class="fld">Target &mu;&#8320;<input type="number" id="simMu0" step="0.1" value="500"></label>
+      <label class="fld">Process &sigma;<input type="number" id="simSd" step="0.1" value="5"></label>
+      <label class="fld">Sample size n<input type="number" id="simN" min="1" max="50" value="9"></label>
+      <label class="fld">z<input type="number" id="simZ" step="0.01" value="3"></label>
+    </div>
+    <div class="row">
+      <label class="fld">True mean now
+        <input type="range" id="simShift" min="-8" max="8" step="0.1" value="0">
+        <b id="simShiftVal">500.0</b>
+      </label>
+      <label class="fld">Speed
+        <select id="simSpeed">
+          <option value="700">slow</option>
+          <option value="380" selected>normal</option>
+          <option value="120">fast</option>
+        </select>
+      </label>
+      <button class="primary" id="simRun">Start</button>
+      <button id="simStep">One sample</button>
+      <button class="danger" id="simReset">Reset</button>
+    </div>
+    <div class="stats" id="simStats"></div>
+    <div class="chartBox"><div id="simChart"></div><div class="cap" id="simCap"></div></div>
+    <div class="explain" id="simExplain"></div>
+
+    <h3>The same two errors as areas under the curve</h3>
+    <p class="hint">Both curves are the sampling distribution of the mean, not the process itself,
+      so their spread is the standard error &sigma;/&radic;n. The limits stay where the target put them.</p>
+    <div class="chartBox"><div id="simBell"></div><div class="cap" id="simBellCap"></div></div>
+    <div class="explain" id="simBellNote"></div>
+
+    <h3>How &alpha; and &beta; were obtained</h3>
+    <div id="simWork"></div>
+  </div>
+</section>
+
+<!-- ===================== TAB 4 : CAPABILITY ===================== -->
+<section id="tab-cap" class="hidden">
+  <div class="card">
+    <h2>Process against specification</h2>
+    <div class="row">
+      <label class="fld">Preset
+        <select id="cpPreset">
+          <option value="wine">Wine filling — centred, &plusmn;10 ml at z=3</option>
+          <option value="wineShift">Wine filling — mean drifted to 495</option>
+          <option value="g1">Group Assignment 2 — process 1</option>
+          <option value="g2">Group Assignment 2 — process 2</option>
+          <option value="g3">Group Assignment 2 — process 3</option>
+          <option value="caseSpec">Group case — chlorate window 0.20 to 0.60 mg/L</option>
+        </select>
+      </label>
+      <label class="fld">Mean<input type="number" id="cpMu" step="0.01" value="500"></label>
+      <label class="fld">&sigma;<input type="number" id="cpSd" step="0.001" value="3.333"></label>
+      <label class="fld">LSL<input type="number" id="cpL" step="0.01" value="490"></label>
+      <label class="fld">USL<input type="number" id="cpU" step="0.01" value="510"></label>
+      <button id="cpFromChart" title="Copies the grand mean and R&#772;/d&#8322; from the x&#772; &amp; R tab">
+        Take mean and &sigma; from the x&#772; &amp; R tab</button>
+    </div>
+    <div id="cpResult"></div>
+    <div class="chartBox"><div id="cpChart"></div><div class="cap" id="cpCap"></div></div>
+    <h3>How the indexes were obtained</h3>
+    <div id="cpWork"></div>
+    <div class="explain">
+      <b>Why 1.33 and not 1.00.</b> These indexes assume the process stays centred. Real processes
+      drift as tools wear and material batches change. At C<sub>p</sub> = 1.00 a typical
+      &plusmn;1.5&sigma; drift alone produces about 6.7% defective, because the specification limit
+      sits exactly at 3&sigma; with no margin. At 1.33 the same drift leaves roughly 0.6%.
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   1. Small statistics helpers
+   ============================================================ */
+
+/** Standard normal cumulative distribution, Abramowitz & Stegun 26.2.17. */
+function normalCdf(z){
+  var b1=0.319381530, b2=-0.356563782, b3=1.781477937,
+      b4=-1.821255978, b5=1.330274429, p=0.2316419, c=0.39894228;
+  if(z >= 0){
+    var t = 1/(1 + p*z);
+    return 1 - c*Math.exp(-z*z/2)*t*(t*(t*(t*(t*b5 + b4) + b3) + b2) + b1);
+  }
+  return 1 - normalCdf(-z);
+}
+
+/** Inverse standard normal, by bisection on normalCdf (plenty accurate here). */
+function normalInv(p){
+  if(p <= 0) return -6;
+  if(p >= 1) return 6;
+  var lo = -6, hi = 6, mid;
+  for(var i = 0; i < 80; i++){
+    mid = (lo + hi)/2;
+    if(normalCdf(mid) < p) lo = mid; else hi = mid;
+  }
+  return mid;
+}
+
+function mean(arr){
+  var s = 0;
+  for(var i = 0; i < arr.length; i++) s += arr[i];
+  return s/arr.length;
+}
+
+function rangeOf(arr){
+  return Math.max.apply(null, arr) - Math.min.apply(null, arr);
+}
+
+/** One standard normal draw (Box-Muller). */
+function randNormal(){
+  var u = 1 - Math.random(), v = Math.random();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+function fmt(x, dp){
+  if(x === null || x === undefined || isNaN(x)) return "—";
+  if(dp === undefined) dp = 4;
+  return Number(x).toFixed(dp);
+}
+
+/** Control-chart factors, standard table for n = 2..15. */
+var FACTORS = {
+  /* A2, D3 and D4 as published — all tabulated for three-sigma limits.
+     d2 and d3 are the underlying constants: A2 = 3/(d2*sqrt(n)) and
+     D4 = 1 + 3*d3/d2, which is how any other z is handled below. */
+  2:{A2:1.880, D3:0,     D4:3.267, d2:1.128, d3:0.853},
+  3:{A2:1.023, D3:0,     D4:2.574, d2:1.693, d3:0.888},
+  4:{A2:0.729, D3:0,     D4:2.282, d2:2.059, d3:0.880},
+  5:{A2:0.577, D3:0,     D4:2.114, d2:2.326, d3:0.864},
+  6:{A2:0.483, D3:0,     D4:2.004, d2:2.534, d3:0.848},
+  7:{A2:0.419, D3:0.076, D4:1.924, d2:2.704, d3:0.833},
+  8:{A2:0.373, D3:0.136, D4:1.864, d2:2.847, d3:0.820},
+  9:{A2:0.337, D3:0.184, D4:1.816, d2:2.970, d3:0.808},
+  10:{A2:0.308,D3:0.223, D4:1.777, d2:3.078, d3:0.797},
+  11:{A2:0.285,D3:0.256, D4:1.744, d2:3.173, d3:0.787},
+  12:{A2:0.266,D3:0.283, D4:1.717, d2:3.258, d3:0.778},
+  13:{A2:0.249,D3:0.307, D4:1.693, d2:3.336, d3:0.770},
+  14:{A2:0.235,D3:0.328, D4:1.672, d2:3.407, d3:0.763},
+  15:{A2:0.223,D3:0.347, D4:1.653, d2:3.472, d3:0.756}
+};
+
+function factorsFor(n){
+  return FACTORS[n] || null;
+}
+
+/* ============================================================
+   2. Chart drawing — one function used by every tab
+   ============================================================ */
+
+/**
+ * Draw a control chart as inline SVG.
+ * opts = {points, centre, ucl, lcl, yLabel, xLabel, centreLabel, dp}
+ * Points outside the limits are drawn in the "serious" colour and labelled,
+ * so identity never rests on colour alone.
+ */
+function drawControlChart(host, opts){
+  var pts = opts.points, n = pts.length;
+  var W = 760, H = 264, ml = 78, mr = 118, mt = 18, mb = 36;
+  var plotW = W - ml - mr, plotH = H - mt - mb;
+  var dp = opts.dp === undefined ? 3 : opts.dp;
+
+  var vals = pts.slice();
+  if(isFinite(opts.ucl)) vals.push(opts.ucl);
+  if(isFinite(opts.lcl)) vals.push(opts.lcl);
+  if(isFinite(opts.centre)) vals.push(opts.centre);
+  var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  var pad = (hi - lo) * 0.18 || 1;
+  lo -= pad; hi += pad;
+  // ranges, counts and proportions cannot be negative, so do not draw below zero
+  if(opts.floorZero && lo < 0) lo = 0;
+
+  function x(i){ return ml + (n === 1 ? plotW/2 : plotW * i/(n - 1)); }
+  function y(v){ return mt + plotH * (hi - v)/(hi - lo); }
+
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="control chart">';
+
+  // recessive grid + y ticks
+  var ticks = 5, i, tv, ty;
+  for(i = 0; i <= ticks; i++){
+    tv = lo + (hi - lo) * i/ticks;
+    ty = y(tv);
+    s += '<line x1="' + ml + '" y1="' + ty + '" x2="' + (ml + plotW) + '" y2="' + ty +
+         '" stroke="var(--grid)" stroke-width="1"/>';
+    s += '<text x="' + (ml - 8) + '" y="' + (ty + 4) + '" text-anchor="end" font-size="11.5" ' +
+         'fill="var(--muted)">' + tv.toFixed(dp) + '</text>';
+  }
+
+  // limit and centre lines, labelled at the right so no legend box is needed
+  function refLine(v, colour, dash, label){
+    if(!isFinite(v)) return "";
+    var yy = y(v);
+    return '<line x1="' + ml + '" y1="' + yy + '" x2="' + (ml + plotW) + '" y2="' + yy +
+           '" stroke="' + colour + '" stroke-width="2" stroke-dasharray="' + dash + '"/>' +
+           '<text x="' + (ml + plotW + 8) + '" y="' + (yy + 4) + '" font-size="12.5" ' +
+           'font-weight="700" fill="' + colour + '">' + label + ' ' + v.toFixed(dp) + '</text>';
+  }
+  s += refLine(opts.ucl, "var(--bad)", "6 4", "UCL");
+  s += refLine(opts.lcl, "var(--bad)", "6 4", "LCL");
+  s += refLine(opts.centre, "var(--muted)", "0", opts.centreLabel || "CL");
+
+  // the series
+  var d = "";
+  for(i = 0; i < n; i++) d += (i ? " L" : "M") + x(i).toFixed(1) + " " + y(pts[i]).toFixed(1);
+  s += '<path d="' + d + '" fill="none" stroke="var(--accent)" stroke-width="2"/>';
+
+  for(i = 0; i < n; i++){
+    var out = (isFinite(opts.ucl) && pts[i] > opts.ucl) || (isFinite(opts.lcl) && pts[i] < opts.lcl);
+    s += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(pts[i]).toFixed(1) + '" r="' +
+         (out ? 6 : 4.5) + '" fill="' + (out ? "var(--bad)" : "var(--accent)") +
+         '" stroke="#fff" stroke-width="2"><title>Sample ' + (i + 1) + ": " +
+         pts[i].toFixed(dp) + (out ? " — outside limits" : "") + '</title></circle>';
+    if(out){
+      s += '<text x="' + x(i).toFixed(1) + '" y="' + (y(pts[i]) - 12) + '" text-anchor="middle" ' +
+           'font-size="12" font-weight="700" fill="var(--bad)">' + pts[i].toFixed(dp) + '</text>';
+    }
+    if(n <= 26){
+      s += '<text x="' + x(i).toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" ' +
+           'font-size="11.5" fill="var(--muted)">' + (i + 1) + '</text>';
+    }
+  }
+
+  s += '<text x="' + (ml + plotW/2) + '" y="' + (H - 1) + '" text-anchor="middle" font-size="12" ' +
+       'fill="var(--muted)">' + (opts.xLabel || "Sample number") + '</text>';
+  s += '<text transform="translate(13,' + (mt + plotH/2) + ') rotate(-90)" text-anchor="middle" ' +
+       'font-size="12" fill="var(--muted)">' + (opts.yLabel || "") + '</text>';
+  s += "</svg>";
+  host.innerHTML = s;
+}
+
+/* ============================================================
+   3. Tab plumbing
+   ============================================================ */
+
+function setTab(t){
+  var b = document.querySelectorAll("#tabbar button"), i;
+  for(i = 0; i < b.length; i++) b[i].classList.toggle("on", b[i].dataset.tab === t);
+  var names = ["start", "xbar", "attr", "run", "cap", "sim"];
+  for(i = 0; i < names.length; i++){
+    document.getElementById("tab-" + names[i]).classList.toggle("hidden", names[i] !== t);
+  }
+}
+
+/* ============================================================
+   4. Tab 1 — x-bar and R charts
+   ============================================================ */
+
+var XB_PRESETS = {
+  deck:   {n:4, label:"deck", data:[[12.11,12.10,12.11,12.08],[12.15,12.12,12.10,12.11],
+           [12.09,12.09,12.11,12.15],[12.12,12.10,12.08,12.10],[12.09,12.14,12.13,12.12]],
+           sigma:0.02, unit:"mm"},
+  bank:   {n:4, label:"bank", data:[[10.2,9.9,9.8,10.1],[10.3,9.8,9.9,10.4],[9.7,9.9,9.9,10.1],
+           [9.9,10.3,10.1,10.5],[9.8,10.2,10.3,9.7]], sigma:0.2, unit:"minutes"},
+  bottle: {n:5, label:"bottle", data:[[499,501,500,502,498],[503,499,500,501,500],
+           [498,497,500,499,501],[502,504,501,500,503],[500,499,498,501,500],[505,503,504,502,506]],
+           sigma:2, unit:"ml"},
+
+  /* ---- the six group-case lines: Ghent chlorate, mg/L, one fault each ---- */
+  caseA: {n:5, label:"caseA", sigma:0.04, unit:"mg/L",
+           data:[[0.438, 0.344, 0.373, 0.415, 0.359],
+           [0.397, 0.407, 0.367, 0.348, 0.408],
+           [0.440, 0.374, 0.387, 0.466, 0.378],
+           [0.379, 0.496, 0.339, 0.432, 0.320],
+           [0.376, 0.460, 0.449, 0.364, 0.382],
+           [0.403, 0.350, 0.422, 0.489, 0.346],
+           [0.321, 0.412, 0.395, 0.472, 0.394],
+           [0.398, 0.392, 0.360, 0.427, 0.347],
+           [0.447, 0.400, 0.420, 0.378, 0.363],
+           [0.472, 0.419, 0.448, 0.407, 0.504],
+           [0.414, 0.359, 0.431, 0.417, 0.307],
+           [0.395, 0.439, 0.432, 0.386, 0.351]]},
+
+  caseB: {n:5, label:"caseB", sigma:0.04, unit:"mg/L",
+           data:[[0.418, 0.324, 0.353, 0.395, 0.339],
+           [0.377, 0.387, 0.347, 0.328, 0.388],
+           [0.420, 0.354, 0.367, 0.446, 0.358],
+           [0.359, 0.476, 0.319, 0.412, 0.300],
+           [0.356, 0.440, 0.429, 0.344, 0.362],
+           [0.383, 0.330, 0.402, 0.469, 0.326],
+           [0.421, 0.512, 0.495, 0.572, 0.494],
+           [0.498, 0.492, 0.460, 0.527, 0.447],
+           [0.547, 0.500, 0.520, 0.478, 0.463],
+           [0.572, 0.519, 0.548, 0.507, 0.604],
+           [0.514, 0.459, 0.531, 0.517, 0.407],
+           [0.495, 0.539, 0.532, 0.486, 0.451]]},
+
+  caseC: {n:5, label:"caseC", sigma:0.04, unit:"mg/L",
+           data:[[0.402, 0.431, 0.377, 0.425, 0.394],
+           [0.393, 0.447, 0.404, 0.399, 0.418],
+           [0.428, 0.399, 0.415, 0.376, 0.391],
+           [0.389, 0.367, 0.362, 0.359, 0.394],
+           [0.396, 0.392, 0.402, 0.367, 0.398],
+           [0.406, 0.419, 0.379, 0.390, 0.350],
+           [0.350, 0.180, 0.258, 0.510, 0.180],
+           [0.480, 0.433, 0.369, 0.446, 0.453],
+           [0.505, 0.377, 0.341, 0.340, 0.301],
+           [0.396, 0.321, 0.507, 0.213, 0.291],
+           [0.305, 0.191, 0.590, 0.159, 0.372],
+           [0.347, 0.566, 0.201, 0.507, 0.327]]},
+
+  caseD: {n:5, label:"caseD", sigma:0.04, unit:"mg/L",
+           data:[[0.373, 0.388, 0.356, 0.384, 0.404],
+           [0.392, 0.432, 0.347, 0.380, 0.353],
+           [0.356, 0.377, 0.391, 0.398, 0.401],
+           [0.467, 0.419, 0.333, 0.396, 0.367],
+           [0.376, 0.440, 0.386, 0.326, 0.405],
+           [0.389, 0.358, 0.367, 0.378, 0.399],
+           [0.390, 0.408, 0.469, 0.377, 0.377],
+           [0.402, 0.449, 0.386, 0.461, 0.365],
+           [0.380, 0.414, 0.386, 0.394, 0.432],
+           [0.447, 0.425, 0.412, 0.469, 0.436],
+           [0.419, 0.470, 0.395, 0.433, 0.450],
+           [0.432, 0.412, 0.445, 0.414, 0.412]]},
+
+  caseE: {n:5, label:"caseE", sigma:0.04, unit:"mg/L",
+           data:[[0.433, 0.351, 0.376, 0.413, 0.364],
+           [0.397, 0.406, 0.371, 0.354, 0.407],
+           [0.435, 0.377, 0.388, 0.458, 0.380],
+           [0.382, 0.484, 0.346, 0.428, 0.330],
+           [0.379, 0.453, 0.443, 0.368, 0.384],
+           [0.403, 0.356, 0.419, 0.478, 0.353],
+           [0.331, 0.410, 0.396, 0.463, 0.394],
+           [0.528, 0.523, 0.495, 0.554, 0.484],
+           [0.441, 0.400, 0.418, 0.381, 0.368],
+           [0.463, 0.416, 0.442, 0.407, 0.491],
+           [0.413, 0.364, 0.427, 0.415, 0.319],
+           [0.396, 0.434, 0.428, 0.388, 0.358]]},
+
+  caseF: {n:5, label:"caseF", sigma:0.04, unit:"mg/L",
+           data:[[0.501, 0.325, 0.379, 0.458, 0.354],
+           [0.425, 0.443, 0.368, 0.332, 0.445],
+           [0.504, 0.381, 0.405, 0.553, 0.388],
+           [0.391, 0.610, 0.315, 0.490, 0.280],
+           [0.385, 0.543, 0.522, 0.362, 0.396],
+           [0.436, 0.336, 0.471, 0.597, 0.328],
+           [0.281, 0.452, 0.421, 0.565, 0.418],
+           [0.426, 0.416, 0.356, 0.480, 0.331],
+           [0.517, 0.431, 0.468, 0.389, 0.361],
+           [0.565, 0.465, 0.521, 0.444, 0.626],
+           [0.457, 0.353, 0.488, 0.462, 0.256],
+           [0.421, 0.504, 0.490, 0.405, 0.339]]}
+};
+
+/** Read the editable grid back as an array of samples (each an array of observations). */
+function xbReadGrid(){
+  var rows = document.querySelectorAll("#xbGrid tr.obsRow"), samples = [], i, j;
+  if(!rows.length) return [];
+  var k = rows[0].querySelectorAll("input").length;   // columns = samples
+  for(j = 0; j < k; j++) samples.push([]);
+  for(i = 0; i < rows.length; i++){
+    var inputs = rows[i].querySelectorAll("input");
+    for(j = 0; j < inputs.length; j++){
+      var v = parseFloat(inputs[j].value);
+      if(!isNaN(v)) samples[j].push(v);
+    }
+  }
+  return samples.filter(function(s){ return s.length > 0; });
+}
+
+function xbRenderGrid(data){
+  var k = data.length, n = data[0].length, i, j;
+  var h = '<table class="dataT"><tr><th>Observation</th>';
+  for(j = 0; j < k; j++) h += "<th>Sample " + (j + 1) + "</th>";
+  h += "</tr>";
+  for(i = 0; i < n; i++){
+    h += '<tr class="obsRow"><td class="jb">' + (i + 1) + "</td>";
+    for(j = 0; j < k; j++){
+      h += '<td><input type="number" step="0.01" value="' + data[j][i] + '"></td>';
+    }
+    h += "</tr>";
+  }
+  h += "</table>";
+  document.getElementById("xbGrid").innerHTML = h;
+  var ins = document.querySelectorAll("#xbGrid input");
+  for(i = 0; i < ins.length; i++) ins[i].addEventListener("input", xbCompute);
+}
+
+/**
+ * Everything the x-bar / R pair needs.
+ * Returns nulls in the limit fields when the sample size has no tabled factor.
+ */
+function computeXbarR(samples, useSigma, sigma, z){
+  var means = samples.map(mean), ranges = samples.map(rangeOf);
+  var grand = mean(means), rbar = mean(ranges);
+  var n = samples[0].length, f = factorsFor(n);
+  var out = {means:means, ranges:ranges, grand:grand, rbar:rbar, n:n, k:samples.length, f:f};
+
+  if(useSigma){
+    var se = sigma/Math.sqrt(n);
+    out.uclX = grand + z*se;
+    out.lclX = grand - z*se;
+    out.basis = "z &sigma;/&radic;n with &sigma; = " + fmt(sigma, 4);
+  } else if(f){
+    // The published A2, D3 and D4 are three-sigma factors. At z = 3 use them as
+    // printed, so the chart matches the table a student would use by hand; at any
+    // other z compute the equivalent factor from the same constants.
+    out.threeSigma = Math.abs(z - 3) < 1e-9;
+    out.A = out.threeSigma ? f.A2 : z/(f.d2*Math.sqrt(n));
+    var spread = z*f.d3/f.d2;
+    out.Dupper = out.threeSigma ? f.D4 : 1 + spread;
+    out.Dlower = out.threeSigma ? f.D3 : Math.max(0, 1 - spread);
+
+    out.uclX = grand + out.A*rbar;
+    out.lclX = grand - out.A*rbar;
+    out.basis = out.threeSigma
+      ? "the tabled A&#8322; = " + f.A2 + " at n = " + n + " (tables are printed for z = 3)"
+      : "A = z/(d&#8322;&radic;n) = " + fmt(z, 2) + "/(" + f.d2 + " &times; &radic;" + n +
+        ") = " + fmt(out.A, 4) + ", the z = " + fmt(z, 2) + " equivalent of A&#8322;";
+  }
+  if(f){
+    out.uclR = (out.Dupper === undefined ? f.D4 : out.Dupper)*rbar;
+    out.lclR = (out.Dlower === undefined ? f.D3 : out.Dlower)*rbar;
+    out.sigmaHat = rbar/f.d2;
+  }
+  return out;
+}
+
+function xbCompute(){
+  var samples = xbReadGrid();
+  if(!samples.length || samples[0].length < 2){ return; }
+  var useSigma = document.getElementById("xbMethod").value === "sigma";
+  var sigma = parseFloat(document.getElementById("xbSigma").value);
+  var z = parseFloat(document.getElementById("xbZ").value) || 3;
+  var r = computeXbarR(samples, useSigma, sigma, z);
+  window.__xb = r;
+  document.getElementById("xbZNote").innerHTML = useSigma
+    ? "z applies to both charts."
+    : (Math.abs(z - 3) < 1e-9
+        ? "z = 3, so the printed A&#8322;, D&#8323; and D&#8324; are used exactly as tabled."
+        : "Tables print A&#8322;, D&#8323; and D&#8324; for z = 3 only, so at this z the factors " +
+          "are computed from d&#8322; and d&#8323; instead.");
+  window.__xbFirst = samples[0];      // raw observations, for the worked first sample
+
+  // summary table of per-sample mean and range
+  var h = '<table class="dataT"><tr><th>Sample</th>';
+  var i;
+  for(i = 0; i < r.k; i++) h += "<th>" + (i + 1) + "</th>";
+  h += "<th>average</th></tr>";
+  h += '<tr><td class="jb">Mean x&#772;</td>';
+  for(i = 0; i < r.k; i++){
+    var oX = (isFinite(r.uclX) && (r.means[i] > r.uclX || r.means[i] < r.lclX));
+    h += '<td class="' + (oX ? "out" : "") + '">' + fmt(r.means[i], 3) + "</td>";
+  }
+  h += "<td><b>" + fmt(r.grand, 4) + "</b></td></tr>";
+  h += '<tr><td class="jb">Range R</td>';
+  for(i = 0; i < r.k; i++){
+    var oR = (isFinite(r.uclR) && (r.ranges[i] > r.uclR || r.ranges[i] < r.lclR));
+    h += '<td class="' + (oR ? "out" : "") + '">' + fmt(r.ranges[i], 3) + "</td>";
+  }
+  h += "<td><b>" + fmt(r.rbar, 4) + "</b></td></tr></table>";
+  document.getElementById("xbSummary").innerHTML = h;
+
+  var res = document.getElementById("xbResult");
+  var charts = document.getElementById("xbCharts");
+  charts.classList.remove("hidden");
+
+  if(!isFinite(r.uclX)){
+    res.innerHTML = '<p class="hint">No tabled factor for n = ' + r.n +
+                    '. Use a known &sigma;, or a sample size between 2 and 15.</p>';
+    charts.classList.add("hidden");
+    return;
+  }
+
+  var anyOut = r.means.some(function(v){ return v > r.uclX || v < r.lclX; }) ||
+               r.ranges.some(function(v){ return v > r.uclR || v < r.lclR; });
+
+  res.innerHTML =
+    '<div class="stats">' +
+      statTile("Grand mean x&#772;&#772;", fmt(r.grand, 4)) +
+      statTile("Average range R&#772;", fmt(r.rbar, 4)) +
+      statTile("UCL mean", fmt(r.uclX, 4)) +
+      statTile("LCL mean", fmt(r.lclX, 4)) +
+      statTile("UCL range", fmt(r.uclR, 4)) +
+      statTile("LCL range", fmt(r.lclR, 4)) +
+    "</div>" +
+    '<div class="explain">Mean chart limits use <b>' + r.basis + "</b>. " +
+      "Range chart limits use <b>D&#8323; = " + r.f.D3 + ", D&#8324; = " + r.f.D4 + "</b>. " +
+      "Estimated process &sigma; from R&#772;/d&#8322; = <b>" + fmt(r.sigmaHat, 4) + "</b>.</div>" +
+    '<div class="verdict ' + (anyOut ? "outCtl" : "inCtl") + '">' +
+      (anyOut ? "Out of control — at least one point falls outside its limits."
+              : "In control — every sample mean and range falls inside its limits.") + "</div>";
+
+  renderXbWorking(r, useSigma, sigma, z);
+  renderPattern(document.getElementById("xbPattern"), r.means, "sample means");
+
+  drawControlChart(document.getElementById("xbChartMean"),
+    {points:r.means, centre:r.grand, ucl:r.uclX, lcl:r.lclX,
+     yLabel:"Sample mean", centreLabel:"x̄̄", dp:3});
+  document.getElementById("xbCapMean").textContent =
+    "Mean chart — " + r.k + " samples of size " + r.n + ".";
+
+  drawControlChart(document.getElementById("xbChartRange"),
+    {points:r.ranges, centre:r.rbar, ucl:r.uclR, lcl:r.lclR, floorZero:true,
+     yLabel:"Sample range", centreLabel:"R̄", dp:3});
+  document.getElementById("xbCapRange").textContent =
+    "Range chart — same samples, monitoring spread.";
+}
+
+
+/** Every substitution behind the two sets of limits, in the order a student would do them. */
+function renderXbWorking(r, useSigma, sigma, z){
+  var host = document.getElementById("xbWork");
+  if(!isFinite(r.uclX)){ host.innerHTML = ""; return; }
+
+  var first = r.k ? null : null;
+  var steps = [];
+
+  steps.push("Mean of each sample. For sample 1: " +
+    ex("x̄₁ = (" + window.__xbFirst.join(" + ") + ") / " + r.n + " = " + fmt(r.means[0], 3)) +
+    '. <span class="note">The other ' + (r.k - 1) + " samples follow the same way.</span>");
+
+  steps.push("Grand mean, the centre line of the mean chart: " +
+    ex("x̄̄ = (" + r.means.map(function(m){ return fmt(m, 3); }).join(" + ") + ") / " + r.k +
+       " = <b>" + fmt(r.grand, 4) + "</b>"));
+
+  steps.push("Range of each sample, largest minus smallest. For sample 1: " +
+    ex("R₁ = " + Math.max.apply(null, window.__xbFirst) + " − " + Math.min.apply(null, window.__xbFirst) +
+       " = " + fmt(r.ranges[0], 3)) + ", and the average range " +
+    ex("R̄ = <b>" + fmt(r.rbar, 4) + "</b>"));
+
+  if(useSigma){
+    var se = sigma/Math.sqrt(r.n);
+    steps.push("The process standard deviation is known, so the spread of a sample mean is the " +
+      "standard error " + ex("σ/√n = " + fmt(sigma, 4) + " / √" + r.n + " = " + fmt(se, 4)));
+    steps.push("Mean chart limits, z standard errors either side of the centre: " +
+      ex("UCL = x̄̄ + z·σ/√n = " + fmt(r.grand, 4) + " + " + fmt(z, 2) + " × " + fmt(se, 4) +
+         " = <b>" + fmt(r.uclX, 4) + "</b>") + " and " +
+      ex("LCL = " + fmt(r.grand, 4) + " − " + fmt(z, 2) + " × " + fmt(se, 4) +
+         " = <b>" + fmt(r.lclX, 4) + "</b>"));
+  } else {
+    if(r.threeSigma){
+      steps.push("With σ unknown the average range stands in for it. From the factor table at " +
+        ex("n = " + r.n) + ": " + ex("A₂ = " + r.f.A2 + ", D₃ = " + r.f.D3 + ", D₄ = " + r.f.D4) +
+        '. <span class="note">Those printed factors are three-sigma factors — ' +
+        "A₂ is simply 3/(d₂√n) = 3/(" + r.f.d2 + " × √" + r.n + ") = " +
+        fmt(3/(r.f.d2*Math.sqrt(r.n)), 4) + ".</span>");
+    } else {
+      steps.push("With σ unknown the average range stands in for it. The tables print A₂, D₃ and " +
+        "D₄ for z = 3 only, so at " + ex("z = " + fmt(z, 2)) + " the factor is computed from the " +
+        "same constants: " +
+        ex("A = z/(d₂√n) = " + fmt(z, 2) + "/(" + r.f.d2 + " × √" + r.n + ") = " + fmt(r.A, 4)));
+    }
+    steps.push("Mean chart limits: " +
+      ex("UCL = x̄̄ + A R̄ = " + fmt(r.grand, 4) + " + " + fmt(r.A, 4) + " × " + fmt(r.rbar, 4) +
+         " = <b>" + fmt(r.uclX, 4) + "</b>") + " and " +
+      ex("LCL = x̄̄ − A R̄ = <b>" + fmt(r.lclX, 4) + "</b>"));
+  }
+
+  var dU = (r.Dupper === undefined) ? r.f.D4 : r.Dupper;
+  var dL = (r.Dlower === undefined) ? r.f.D3 : r.Dlower;
+  steps.push("Range chart limits come from the same R̄, and follow the same z: " +
+    ex("UCL = D₄R̄ = " + fmt(dU, 3) + " × " + fmt(r.rbar, 4) + " = <b>" + fmt(r.uclR, 4) + "</b>") +
+    " and " + ex("LCL = D₃R̄ = " + fmt(dL, 3) + " × " + fmt(r.rbar, 4) + " = <b>" +
+    fmt(r.lclR, 4) + "</b>") +
+    '. <span class="note">D₄ = 1 + z·d₃/d₂ and D₃ = 1 − z·d₃/d₂, floored at zero — a range ' +
+    "cannot be negative.</span>");
+
+  steps.push('<span class="note">As a check, R̄/d₂ = ' + fmt(r.rbar, 4) + " / " + r.f.d2 +
+    " = " + fmt(r.sigmaHat, 4) + " estimates the process standard deviation from the ranges.</span>");
+
+  host.innerHTML = workList(steps);
+}
+
+function statTile(k, v, cls){
+  return '<div class="stat ' + (cls || "") + '"><div class="k">' + k + '</div><div class="v">' + v + "</div></div>";
+}
+
+/* ============================================================
+   5. Tab 2 — p and c charts
+   ============================================================ */
+
+var AT_PRESETS = {
+  p:[
+    {id:"case2P1", name:"Group case 2 — Line 1 (bottle inspection, 100 per sample)", n:100,
+     data:[10, 11, 8, 10, 6, 6, 10, 8, 6, 3, 9, 9, 5, 7, 7, 12, 13, 7, 13, 8]},
+    {id:"case2P2", name:"Group case 2 — Line 2 (bottle inspection, 100 per sample)", n:100,
+     data:[2, 11, 7, 10, 10, 9, 11, 7, 9, 10, 8, 11, 34, 3, 5, 6, 5, 8, 7, 9]},
+    {id:"case2P3", name:"Group case 2 — Line 3 (bottle inspection, 100 per sample)", n:100,
+     data:[11, 4, 7, 7, 9, 8, 6, 2, 8, 9, 23, 19, 16, 21, 16, 17, 12, 18, 12, 12]},
+    {id:"billing", name:"Deck example — 20 samples of 100 billing statements", n:100,
+     data:[7,10,12,4,9,11,10,18,13,10,8,12,9,10,16,10,8,12,10,21]},
+    {id:"chips", name:"Exercise — 4 samples of 200 chips", n:200, data:[4,2,5,9]},
+    {id:"speakers", name:"Individual Assignment 3 — 4 of 100 speakers fail", n:100, data:[4]}
+  ],
+  c:[
+    {id:"case2C1", name:"Group case 2 — Station A (crate audit, defects per crate)",
+     data:[5, 6, 8, 4, 8, 4, 5, 5, 3, 8, 4, 4, 9, 11, 6, 4, 2, 4, 6, 2]},
+    {id:"case2C2", name:"Group case 2 — Station B (crate audit, defects per crate)",
+     data:[5, 6, 7, 4, 6, 2, 4, 5, 22, 2, 3, 8, 11, 6, 4, 2, 4, 6, 0, 2]},
+    {id:"case2C3", name:"Group case 2 — Station C (crate audit, defects per crate)",
+     data:[2, 2, 4, 2, 5, 0, 0, 2, 4, 1, 16, 14, 12, 10, 8, 7, 4, 5, 6, 10]},
+    {id:"wire", name:"Deck example — 18 rolls of coiled wire", data:[3,2,4,5,1,2,4,1,2,1,3,4,2,4,2,1,3,1]},
+    {id:"cable", name:"Exercise — defects per spool of cable, 14 spools", data:[2,3,1,0,1,3,2,0,2,1,3,1,2,0]},
+    {id:"scratch", name:"Individual Assignment 3 — average 3.9 scratches", data:[3.9]}
+  ]
+};
+
+function atFillPresets(){
+  var type = document.getElementById("atType").value;
+  var sel = document.getElementById("atPreset"), list = AT_PRESETS[type], i;
+  var h = '<option value="input">Your data from Start here</option>';
+  for(i = 0; i < list.length; i++) h += '<option value="' + list[i].id + '">' + list[i].name + "</option>";
+  sel.innerHTML = h;
+  // on a fresh page there is nothing pasted yet, so start on the first real preset
+  if(!(START.flat && START.flat.length)) sel.selectedIndex = 1;
+  document.getElementById("atNFld").classList.toggle("hidden", type !== "p");
+  atLoadPreset();
+}
+
+function atLoadPreset(){
+  var type = document.getElementById("atType").value;
+  var id = document.getElementById("atPreset").value;
+  var list = AT_PRESETS[type], i;
+
+  if(id === "input"){
+    if(START.flat && START.flat.length){
+      document.getElementById("atData").value = START.flat.join(", ");
+      if(START.n) document.getElementById("atN").value = START.n;
+    } else {
+      document.getElementById("atData").value = "";
+    }
+    atRun();
+    return;
+  }
+  for(i = 0; i < list.length; i++){
+    if(list[i].id === id){
+      document.getElementById("atData").value = list[i].data.join(", ");
+      if(list[i].n) document.getElementById("atN").value = list[i].n;
+    }
+  }
+  atRun();
+}
+
+/** Turn whatever is in the box into a list of numbers. */
+function parseNumbers(text){
+  return text.split(/[\s,;]+/).map(parseFloat).filter(function(v){ return !isNaN(v); });
+}
+
+/** Resolve the z the user wants, whichever way they chose to express it. */
+function atResolveZ(){
+  var by = document.getElementById("atBy").value;
+  if(by === "z") return parseFloat(document.getElementById("atZ").value) || 3;
+  if(by === "alpha"){
+    var a = parseFloat(document.getElementById("atAlpha").value) || 0.03;
+    return normalInv(1 - a/2);
+  }
+  var pct = parseFloat(document.getElementById("atPct").value) || 99.74;
+  return normalInv(1 - (1 - pct/100)/2);
+}
+
+function computePChart(counts, n, z){
+  var total = counts.reduce(function(a, b){ return a + b; }, 0);
+  var pbar = total/(counts.length*n);
+  var se = Math.sqrt(pbar*(1 - pbar)/n);
+  return {props:counts.map(function(c){ return c/n; }), centre:pbar, se:se,
+          ucl:pbar + z*se, lcl:Math.max(0, pbar - z*se), rawLcl:pbar - z*se, total:total};
+}
+
+function computeCChart(counts, z){
+  var cbar = mean(counts), se = Math.sqrt(cbar);
+  return {props:counts.slice(), centre:cbar, se:se,
+          ucl:cbar + z*se, lcl:Math.max(0, cbar - z*se), rawLcl:cbar - z*se};
+}
+
+function atRun(){
+  var type = document.getElementById("atType").value;
+  var counts = parseNumbers(document.getElementById("atData").value);
+  var n = parseInt(document.getElementById("atN").value, 10) || 100;
+  var z = atResolveZ();
+  var alpha = 2*(1 - normalCdf(z));
+
+  document.getElementById("atZFld").classList.toggle("hidden",
+    document.getElementById("atBy").value !== "z");
+  document.getElementById("atAlphaFld").classList.toggle("hidden",
+    document.getElementById("atBy").value !== "alpha");
+  document.getElementById("atPctFld").classList.toggle("hidden",
+    document.getElementById("atBy").value !== "pct");
+
+  document.getElementById("atZNote").innerHTML =
+    "Using <b>z = " + fmt(z, 3) + "</b>, which is an &alpha; risk of <b>" + fmt(alpha, 4) +
+    "</b> (" + fmt(alpha*100, 2) + "% of in-control samples fall outside the limits by chance) " +
+    "and covers <b>" + fmt((1 - alpha)*100, 2) + "%</b> of chance variation.";
+
+  if(counts.length < 1){ document.getElementById("atResult").innerHTML = ""; return; }
+
+  var r = (type === "p") ? computePChart(counts, n, z) : computeCChart(counts, z);
+  window.__at = r;
+
+  var res = document.getElementById("atResult");
+  var dp = (type === "p") ? 4 : 2;
+  var outs = [];
+  for(var i = 0; i < r.props.length; i++){
+    if(r.props[i] > r.ucl || r.props[i] < r.lcl) outs.push(i + 1);
+  }
+
+  var floorNote = (r.rawLcl < 0)
+    ? " The computed lower limit is " + fmt(r.rawLcl, dp) +
+      ", which is negative and has no meaning for a count, so it is set to <b>0</b>."
+    : "";
+
+  res.innerHTML =
+    '<div class="stats">' +
+      statTile(type === "p" ? "p&#772;" : "c&#772;", fmt(r.centre, dp)) +
+      statTile("Std deviation", fmt(r.se, dp)) +
+      statTile("UCL", fmt(r.ucl, dp)) +
+      statTile("LCL", fmt(r.lcl, dp)) +
+      statTile("z used", fmt(z, 3)) +
+    "</div>" +
+    '<div class="explain">' +
+      (type === "p"
+        ? "p&#772; = total defectives / total inspected = " + r.total + " / " +
+          (counts.length*n) + " = <b>" + fmt(r.centre, 4) + "</b>, and " +
+          "&radic;(p&#772;(1&minus;p&#772;)/n) = <b>" + fmt(r.se, 4) + "</b>."
+        : "c&#772; = average defects per unit = <b>" + fmt(r.centre, 3) +
+          "</b>, and the standard deviation of a count is &radic;c&#772; = <b>" +
+          fmt(r.se, 3) + "</b>.") + floorNote + "</div>" +
+    '<div class="verdict ' + (outs.length ? "outCtl" : "inCtl") + '">' +
+      (outs.length
+        ? "Out of control — sample " + outs.join(", ") + " falls outside the limits."
+        : "In control — every sample falls inside the limits.") + "</div>";
+
+  renderAtWorking(type, r, counts, n, z, alpha);
+  renderPattern(document.getElementById("atPattern"), r.props,
+                type === "p" ? "proportions" : "counts");
+
+  drawControlChart(document.getElementById("atChart"),
+    {points:r.props, centre:r.centre, ucl:r.ucl, lcl:r.lcl, floorZero:true,
+     yLabel:(type === "p" ? "Proportion defective" : "Defects per unit"),
+     centreLabel:(type === "p" ? "p̄" : "c̄"), dp:dp});
+  document.getElementById("atCap").textContent =
+    (type === "p" ? "p-chart — " : "c-chart — ") + counts.length + " samples at z = " + fmt(z, 2) + ".";
+}
+
+
+/** The substitutions behind a p-chart or a c-chart, including where z came from. */
+function renderAtWorking(type, r, counts, n, z, alpha){
+  var host = document.getElementById("atWork");
+  var steps = [], k = counts.length;
+  var by = document.getElementById("atBy").value;
+
+  if(by === "alpha"){
+    steps.push("The α risk was given, so z comes first: an α of " + fmt(alpha, 4) +
+      " leaves " + ex(fmt(alpha/2, 5)) + " in each tail, so the limits must cover " +
+      ex(fmt((1 - alpha)/2, 5)) + " on each side of the centre. From the normal table, " +
+      ex("z = <b>" + fmt(z, 3) + "</b>"));
+  } else if(by === "pct"){
+    steps.push("The limits must describe " + ex(fmt((1 - alpha)*100, 2) + "%") +
+      " of chance variation, which is " + ex(fmt((1 - alpha)/2, 5)) +
+      " on each side of the centre. From the normal table, " + ex("z = <b>" + fmt(z, 3) + "</b>"));
+  } else {
+    steps.push("z was set directly at " + ex(fmt(z, 2)) + ", which carries an α risk of " +
+      ex("2(1 − Φ(" + fmt(z, 2) + ")) = <b>" + fmt(alpha, 4) + "</b>") +
+      ' <span class="note">— the chance a stable process signals anyway.</span>');
+  }
+
+  if(type === "p"){
+    steps.push("Centre line, the overall proportion defective: " +
+      ex("p̄ = total defectives / total inspected = " + r.total + " / (" + k + " × " + n +
+         ") = <b>" + fmt(r.centre, 4) + "</b>"));
+    steps.push("Each item is either defective or not, so the count is binomial. For a large " +
+      "enough sample that is close to normal, with standard deviation " +
+      ex("√(p̄(1−p̄)/n) = √(" + fmt(r.centre, 4) + " × " + fmt(1 - r.centre, 4) + " / " + n +
+         ") = <b>" + fmt(r.se, 4) + "</b>"));
+    steps.push("Limits, z standard deviations either side: " +
+      ex("UCL = p̄ + z·σₚ = " + fmt(r.centre, 4) + " + " + fmt(z, 2) + " × " + fmt(r.se, 4) +
+         " = <b>" + fmt(r.ucl, 4) + "</b>"));
+    steps.push(ex("LCL = p̄ − z·σₚ = " + fmt(r.centre, 4) + " − " + fmt(z, 2) + " × " +
+      fmt(r.se, 4) + " = " + fmt(r.rawLcl, 4)) +
+      (r.rawLcl < 0
+        ? ', which is negative. A proportion cannot be below zero, so <b>LCL = 0</b>. <span class="note">' +
+          "The chart therefore cannot signal an unusually good sample.</span>"
+        : ", so <b>LCL = " + fmt(r.lcl, 4) + "</b>"));
+  } else {
+    steps.push("Centre line, the average number of defects per unit: " +
+      ex("c̄ = (" + counts.join(" + ") + ") / " + k + " = <b>" + fmt(r.centre, 3) + "</b>"));
+    steps.push("Defects arrive independently over a unit, which is a Poisson count, and for a " +
+      "Poisson distribution the variance equals the mean — so the standard deviation is " +
+      ex("√c̄ = √" + fmt(r.centre, 3) + " = <b>" + fmt(r.se, 3) + "</b>") +
+      '. <span class="note">This is why a c-chart needs no sample size.</span>');
+    steps.push("Limits: " + ex("UCL = c̄ + z√c̄ = " + fmt(r.centre, 3) + " + " + fmt(z, 2) +
+      " × " + fmt(r.se, 3) + " = <b>" + fmt(r.ucl, 3) + "</b>"));
+    steps.push(ex("LCL = c̄ − z√c̄ = " + fmt(r.rawLcl, 3)) +
+      (r.rawLcl < 0
+        ? ', which is negative, so <b>LCL = 0</b>. <span class="note">A count of defects ' +
+          "cannot go below zero.</span>"
+        : ", so <b>LCL = " + fmt(r.lcl, 3) + "</b>"));
+  }
+  host.innerHTML = workList(steps);
+}
+
+/* ============================================================
+   6. Tab 3 — live simulator
+   ============================================================ */
+
+var sim = {points:[], timer:null, falseAlarms:0, misses:0, inCtlPoints:0, shiftedPoints:0};
+
+function simParams(){
+  return {
+    mu0: parseFloat(document.getElementById("simMu0").value),
+    sd:  parseFloat(document.getElementById("simSd").value),
+    n:   parseInt(document.getElementById("simN").value, 10),
+    z:   parseFloat(document.getElementById("simZ").value),
+    shift: parseFloat(document.getElementById("simShift").value)
+  };
+}
+
+/** One sample of n observations from the CURRENT true mean. */
+function simDraw(){
+  var p = simParams();
+  var trueMu = p.mu0 + p.shift, s = 0;
+  for(var i = 0; i < p.n; i++) s += trueMu + p.sd*randNormal();
+  var xbar = s/p.n;
+
+  var se = p.sd/Math.sqrt(p.n);
+  var ucl = p.mu0 + p.z*se, lcl = p.mu0 - p.z*se;
+  var signalled = (xbar > ucl || xbar < lcl);
+
+  // A signal while the process is on target is a false alarm (Type I);
+  // no signal while the process has shifted is a miss (Type II).
+  if(Math.abs(p.shift) < 1e-9){
+    sim.inCtlPoints++;
+    if(signalled) sim.falseAlarms++;
+  } else {
+    sim.shiftedPoints++;
+    if(!signalled) sim.misses++;
+  }
+
+  sim.points.push(xbar);
+  if(sim.points.length > 60) sim.points.shift();
+  simRender();
+}
+
+function simRender(){
+  var p = simParams();
+  var se = p.sd/Math.sqrt(p.n);
+  var ucl = p.mu0 + p.z*se, lcl = p.mu0 - p.z*se;
+
+  var alpha = 2*(1 - normalCdf(p.z));
+  var delta = Math.abs(p.shift)/se;                 // shift in standard errors
+  var beta = normalCdf(p.z - delta) - normalCdf(-p.z - delta);
+
+  document.getElementById("simShiftVal").textContent = (p.mu0 + p.shift).toFixed(1);
+
+  var obsAlpha = sim.inCtlPoints ? sim.falseAlarms/sim.inCtlPoints : null;
+  var obsBeta  = sim.shiftedPoints ? sim.misses/sim.shiftedPoints : null;
+
+  document.getElementById("simStats").innerHTML =
+    statTile("Samples plotted", sim.points.length) +
+    statTile("False alarms", sim.falseAlarms + " / " + sim.inCtlPoints, "warnS") +
+    statTile("Observed &alpha;", obsAlpha === null ? "—" : fmt(obsAlpha, 4)) +
+    statTile("Theoretical &alpha;", fmt(alpha, 4)) +
+    statTile("Missed shifts", sim.misses + " / " + sim.shiftedPoints, "bad") +
+    statTile("Observed &beta;", obsBeta === null ? "—" : fmt(obsBeta, 3)) +
+    statTile("Theoretical &beta;", Math.abs(p.shift) < 1e-9 ? "—" : fmt(beta, 3));
+
+  if(sim.points.length){
+    drawControlChart(document.getElementById("simChart"),
+      {points:sim.points, centre:p.mu0, ucl:ucl, lcl:lcl,
+       yLabel:"Sample mean", centreLabel:"μ₀", dp:2});
+  }
+  document.getElementById("simCap").textContent =
+    "Limits fixed at " + fmt(lcl, 2) + " to " + fmt(ucl, 2) +
+    " (standard error " + fmt(se, 3) + "). True mean now " + fmt(p.mu0 + p.shift, 2) + ".";
+
+  var bell = drawAlphaBeta(document.getElementById("simBell"), p.mu0, se, p.z, p.shift);
+  renderSimWorking(p.mu0, p.sd, p.n, p.z, p.shift);
+  document.getElementById("simBellCap").textContent = (Math.abs(p.shift) < 1e-9)
+    ? "Red tails are α, split equally beyond each limit. Move the true mean off target to see β appear."
+    : "Red tails are α under the on-target curve. Amber is β — the shifted curve's area still inside the limits.";
+  document.getElementById("simBellNote").innerHTML = (Math.abs(p.shift) < 1e-9)
+    ? "The limits sit <b>z = " + fmt(p.z, 2) + "</b> standard errors either side of μ₀, so the red tails " +
+      "together hold <b>α = " + fmt(bell.alpha, 4) + "</b> of the distribution. That area is the false-alarm rate, " +
+      "and it is fixed by the choice of z alone."
+    : "The shift is <b>" + fmt(Math.abs(bell.delta), 2) + " standard errors</b>, so the blue curve slides across " +
+      "while the limits stay put. The amber area, <b>β = " + fmt(bell.beta, 3) + "</b>, is the chance a sample " +
+      "from the shifted process still plots inside the limits and the shift goes unnoticed. " +
+      "Widening the limits (larger z) shrinks the red tails but grows the amber area — that trade-off is the " +
+      "whole design problem, and only a larger sample size improves both at once.";
+
+  document.getElementById("simExplain").innerHTML = (Math.abs(p.shift) < 1e-9)
+    ? "<b>On target.</b> Every point outside the limits here is a <b>false alarm</b> — a Type I error. " +
+      "In the long run they happen at the rate &alpha; = " + fmt(alpha, 4) + ", about one sample in " +
+      Math.round(1/Math.max(alpha, 1e-9)) + "."
+    : "<b>Shifted by " + fmt(Math.abs(p.shift), 2) + " (" + fmt(delta, 2) + " standard errors).</b> " +
+      "Each point that stays inside the limits is a <b>missed shift</b> — a Type II error. " +
+      "Theory says &beta; = " + fmt(beta, 3) + ", so on average it takes about " +
+      Math.max(1, Math.round(1/Math.max(1 - beta, 1e-9))) + " samples to catch this shift.";
+}
+
+
+/**
+ * The two errors as areas under the sampling distribution.
+ *
+ *   grey curve   sampling distribution of x-bar when the process is on target
+ *   red tails    alpha, the chance of a point landing outside the limits anyway
+ *   blue curve   the same distribution after the true mean has shifted
+ *   amber area   beta, the chance the shifted process still plots inside the limits
+ *
+ * Both curves have standard error se = sigma/sqrt(n) — this is the sampling
+ * distribution, not the process distribution.
+ */
+function drawAlphaBeta(host, mu0, se, z, shift){
+  var W = 760, H = 300, ml = 46, mr = 46, mt = 54, mb = 44;
+  var plotW = W - ml - mr, plotH = H - mt - mb;
+  var mu1 = mu0 + shift, shifted = Math.abs(shift) > 1e-9;
+  var ucl = mu0 + z*se, lcl = mu0 - z*se;
+
+  var lo = Math.min(mu0, mu1) - 4.4*se, hi = Math.max(mu0, mu1) + 4.4*se;
+  var peak = 1/(se*Math.sqrt(2*Math.PI));
+  function x(v){ return ml + plotW*(v - lo)/(hi - lo); }
+  function y(d){ return mt + plotH*(1 - d/peak*0.9); }
+  function dens(v, mu){ return Math.exp(-0.5*Math.pow((v - mu)/se, 2))/(se*Math.sqrt(2*Math.PI)); }
+
+  /** Filled area under one curve between two x values. */
+  function area(mu, from, to, fill, opacity){
+    if(to <= from) return "";
+    var base = mt + plotH, d = "M" + x(from).toFixed(1) + " " + base, i, v;
+    for(i = 0; i <= 90; i++){
+      v = from + (to - from)*i/90;
+      d += " L" + x(v).toFixed(1) + " " + y(dens(v, mu)).toFixed(1);
+    }
+    d += " L" + x(to).toFixed(1) + " " + base + " Z";
+    return '<path d="' + d + '" fill="' + fill + '" opacity="' + opacity + '"/>';
+  }
+
+  /** Outline of one curve across the whole plot. */
+  function curve(mu, stroke, width){
+    var d = "", i, v;
+    for(i = 0; i <= 240; i++){
+      v = lo + (hi - lo)*i/240;
+      d += (i ? " L" : "M") + x(v).toFixed(1) + " " + y(dens(v, mu)).toFixed(1);
+    }
+    return '<path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="' + width + '"/>';
+  }
+
+  var alpha = 2*(1 - normalCdf(z));
+  var delta = shift/se;
+  var beta = normalCdf(z - delta) - normalCdf(-z - delta);
+
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" ' +
+          'aria-label="sampling distribution showing the alpha tails and the beta region">';
+
+  // beta first so the alpha tails stay readable on top of it
+  if(shifted) s += area(mu1, lcl, ucl, "var(--warn)", "0.30");
+  s += area(mu0, lo, lcl, "var(--bad)", "0.45");
+  s += area(mu0, ucl, hi, "var(--bad)", "0.45");
+
+  if(shifted) s += curve(mu1, "var(--accent)", 2.2);
+  s += curve(mu0, "var(--muted)", shifted ? 1.8 : 2.2);
+
+  // baseline
+  s += '<line x1="' + ml + '" y1="' + (mt + plotH) + '" x2="' + (ml + plotW) + '" y2="' +
+       (mt + plotH) + '" stroke="var(--line)" stroke-width="1.5"/>';
+
+  // the control limits
+  function vline(v, colour, label){
+    return '<line x1="' + x(v).toFixed(1) + '" y1="' + (mt - 4) + '" x2="' + x(v).toFixed(1) +
+           '" y2="' + (mt + plotH) + '" stroke="' + colour +
+           '" stroke-width="2" stroke-dasharray="6 4"/>' +
+           '<text x="' + x(v).toFixed(1) + '" y="' + (mt - 10) + '" text-anchor="middle" ' +
+           'font-size="12.5" font-weight="700" fill="' + colour + '">' + label + "</text>";
+  }
+  s += vline(lcl, "var(--bad)", "LCL " + lcl.toFixed(2));
+  s += vline(ucl, "var(--bad)", "UCL " + ucl.toFixed(2));
+
+  // centre markers on the baseline
+  function tick(v, colour, label){
+    return '<line x1="' + x(v).toFixed(1) + '" y1="' + (mt + plotH - 6) + '" x2="' + x(v).toFixed(1) +
+           '" y2="' + (mt + plotH + 6) + '" stroke="' + colour + '" stroke-width="2.5"/>' +
+           '<text x="' + x(v).toFixed(1) + '" y="' + (mt + plotH + 22) + '" text-anchor="middle" ' +
+           'font-size="12" font-weight="700" fill="' + colour + '">' + label + "</text>";
+  }
+  s += tick(mu0, "var(--muted)", "μ₀ " + mu0.toFixed(1));
+  if(shifted && Math.abs(x(mu1) - x(mu0)) > 26) s += tick(mu1, "var(--accent)", "μ " + mu1.toFixed(1));
+
+  // value labels on the shaded areas
+  s += '<text x="' + (x(lcl) - 6) + '" y="' + (mt + plotH - 12) + '" text-anchor="end" ' +
+       'font-size="12" font-weight="700" fill="var(--bad)">α/2 = ' + (alpha/2).toFixed(4) + "</text>";
+  s += '<text x="' + (x(ucl) + 6) + '" y="' + (mt + plotH - 12) + '" font-size="12" ' +
+       'font-weight="700" fill="var(--bad)">α/2 = ' + (alpha/2).toFixed(4) + "</text>";
+  if(shifted){
+    var bx = Math.max(x(lcl) + 30, Math.min(x(mu1), x(ucl) - 30));
+    s += '<text x="' + bx.toFixed(1) + '" y="' + (mt + plotH*0.52) + '" text-anchor="middle" ' +
+         'font-size="15" font-weight="800" fill="var(--warn)">β = ' + beta.toFixed(3) + "</text>";
+  }
+
+  // legend — two series, so identity never rests on colour alone
+  s += '<circle cx="' + (ml + 6) + '" cy="16" r="5" fill="var(--muted)"/>' +
+       '<text x="' + (ml + 18) + '" y="20" font-size="12.5" fill="var(--ink)">on target (μ₀)</text>';
+  if(shifted){
+    s += '<circle cx="' + (ml + 150) + '" cy="16" r="5" fill="var(--accent)"/>' +
+         '<text x="' + (ml + 162) + '" y="20" font-size="12.5" fill="var(--ink)">shifted (μ)</text>';
+  }
+  s += '<text x="' + (ml + plotW/2) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="12" ' +
+       'fill="var(--muted)">Sample mean</text>';
+  s += "</svg>";
+  host.innerHTML = s;
+
+  return {alpha:alpha, beta:beta, delta:delta, ucl:ucl, lcl:lcl};
+}
+
+
+/* ============================================================
+   7b. Working, pattern check and the two views
+   ============================================================ */
+
+/** Render an ordered list of substitution steps. Each step is plain HTML. */
+function workList(steps){
+  var h = '<ol class="work">', i;
+  for(i = 0; i < steps.length; i++) h += "<li>" + steps[i] + "</li>";
+  return h + "</ol>";
+}
+
+/** Wrap an expression so it reads as arithmetic rather than prose. */
+function ex(t){ return '<span class="ex">' + t + "</span>"; }
+
+/* ---- the same two run tests the run-test page uses, applied to what is plotted ---- */
+
+function medianOf(arr){
+  var a = arr.slice().sort(function(x, y){ return x - y; });
+  var m = Math.floor(a.length/2);
+  return (a.length % 2) ? a[m] : (a[m - 1] + a[m])/2;
+}
+
+function countRuns(marks){
+  var runs = 0, prev = null;
+  for(var i = 0; i < marks.length; i++){
+    if(marks[i] === null) continue;
+    if(marks[i] !== prev){ runs++; prev = marks[i]; }
+  }
+  return runs;
+}
+
+/**
+ * Above/below-median and up/down run tests on the plotted series.
+ * Ties are dropped, which is the convention used on the run-test page.
+ * Returns null when the series is too short for the tests to mean anything.
+ */
+function patternCheck(values){
+  if(values.length < 8) return null;
+  var med = medianOf(values), i;
+
+  var mAB = [], mUD = [null];
+  for(i = 0; i < values.length; i++){
+    mAB.push(values[i] > med ? "A" : (values[i] < med ? "B" : null));
+    if(i > 0){
+      mUD.push(values[i] > values[i - 1] ? "U" : (values[i] < values[i - 1] ? "D" : null));
+    }
+  }
+
+  var nAB = mAB.filter(function(m){ return m !== null; }).length;
+  var nUD = values.length;
+  var rAB = countRuns(mAB), rUD = countRuns(mUD);
+  var eAB = nAB/2 + 1, sAB = Math.sqrt((nAB - 1)/4);
+  var eUD = (2*nUD - 1)/3, sUD = Math.sqrt((16*nUD - 29)/90);
+
+  return {median:med,
+          ab:{runs:rAB, exp:eAB, sd:sAB, z:(rAB - eAB)/sAB},
+          ud:{runs:rUD, exp:eUD, sd:sUD, z:(rUD - eUD)/sUD}};
+}
+
+/** The pattern panel: a signal here matters even when every point is inside the limits. */
+function renderPattern(host, values, what){
+  var p = patternCheck(values);
+  if(!p){
+    host.innerHTML = '<div class="pattern"><div class="ttl">Pattern check</div>' +
+      '<span class="hint">At least 8 samples are needed before a run test says anything useful.</span></div>';
+    return;
+  }
+  var flagged = Math.abs(p.ab.z) > 2 || Math.abs(p.ud.z) > 2;
+  var msg;
+  if(!flagged){
+    msg = "Both run tests sit inside &plusmn;2, so the " + what +
+          " show no pattern beyond ordinary chance variation.";
+  } else {
+    var bits = [];
+    if(Math.abs(p.ab.z) > 2){
+      bits.push(p.ab.z < 0
+        ? "too few runs above and below the median (z = " + fmt(p.ab.z, 2) +
+          "), which means the series stays on one side and drifts"
+        : "too many runs above and below the median (z = " + fmt(p.ab.z, 2) +
+          "), which means it crosses the centre more often than chance allows");
+    }
+    if(Math.abs(p.ud.z) > 2){
+      bits.push(p.ud.z > 0
+        ? "too many up/down runs (z = " + fmt(p.ud.z, 2) + "), a saw-tooth pattern"
+        : "too few up/down runs (z = " + fmt(p.ud.z, 2) + "), a trend in one direction");
+    }
+    msg = "A non-random pattern is indicated: " + bits.join(", and ") +
+          ". This is a signal even if every point sits inside the control limits.";
+  }
+  host.innerHTML =
+    '<div class="pattern ' + (flagged ? "flag" : "calm") + '">' +
+      '<div class="ttl">Pattern check — run tests on the plotted ' + what + "</div>" +
+      "<div>" + msg + "</div>" +
+      '<div class="hint" style="margin-top:6px">Median ' + fmt(p.median, 3) +
+        ". Above/below: " + p.ab.runs + " runs against " + fmt(p.ab.exp, 2) + " expected. " +
+        "Up/down: " + p.ud.runs + " runs against " + fmt(p.ud.exp, 2) + " expected. " +
+        "Ties are dropped.</div>" +
+    "</div>";
+}
+
+/* ---- lecture view shows everything; activity view is the lean student layout ---- */
+
+var VIEW = "lecture";
+
+function setView(v){
+  VIEW = v;
+  var b = document.querySelectorAll("#viewSeg button"), i;
+  for(i = 0; i < b.length; i++) b[i].classList.toggle("on", b[i].dataset.view === v);
+  document.getElementById("viewNote").textContent = (v === "lecture")
+    ? "Everything, including the live simulator."
+    : "Data, chart, working and questions only.";
+
+  var lect = document.querySelectorAll(".lectureOnly");
+  for(i = 0; i < lect.length; i++) lect[i].classList.toggle("hidden", v !== "lecture");
+  var act = document.querySelectorAll(".activityOnly");
+  for(i = 0; i < act.length; i++) act[i].classList.toggle("hidden", v !== "activity");
+
+  // the simulator is an instructor demonstration, so it leaves the activity layout
+  var simBtn = document.querySelector('#tabbar button[data-tab="sim"]');
+  simBtn.classList.toggle("hidden", v === "activity");
+  if(v === "activity" && simBtn.classList.contains("on")) setTab("xbar");
+}
+
+
+/** The two error probabilities, written out the way the deck derives them. */
+function renderSimWorking(mu0, sd, n, z, shift){
+  var se = sd/Math.sqrt(n);
+  var ucl = mu0 + z*se, lcl = mu0 - z*se;
+  var alpha = 2*(1 - normalCdf(z));
+  var delta = shift/se;
+  var upper = normalCdf(z - delta), lower = normalCdf(-z - delta);
+  var beta = upper - lower;
+
+  var steps = [];
+  steps.push("A point on the chart is a sample mean, so its spread is the standard error " +
+    ex("σ/√n = " + fmt(sd, 2) + " / √" + n + " = <b>" + fmt(se, 4) + "</b>") +
+    ', not the process σ. <span class="note">This is the whole reason larger samples give ' +
+    "tighter limits.</span>");
+  steps.push("Limits sit z standard errors either side of the target: " +
+    ex("UCL = " + fmt(mu0, 2) + " + " + fmt(z, 2) + " × " + fmt(se, 4) + " = <b>" + fmt(ucl, 3) +
+       "</b>") + " and " + ex("LCL = <b>" + fmt(lcl, 3) + "</b>"));
+  steps.push("<b>Type I error.</b> If the process is on target, a point still lands outside by " +
+    "chance with probability " +
+    ex("α = 2(1 − Φ(" + fmt(z, 2) + ")) = <b>" + fmt(alpha, 4) + "</b>") +
+    " — the two red tails together.");
+
+  if(Math.abs(shift) < 1e-9){
+    steps.push('<span class="note">Move the true mean off target to see the Type II working ' +
+      "appear here.</span>");
+  } else {
+    steps.push("<b>Type II error.</b> The true mean has moved to " + fmt(mu0 + shift, 2) +
+      ", which in standard errors is " +
+      ex("δ = (" + fmt(mu0 + shift, 2) + " − " + fmt(mu0, 2) + ") / " + fmt(se, 4) +
+         " = <b>" + fmt(delta, 3) + "</b>"));
+    steps.push("β is the area of the shifted curve still between the limits: " +
+      ex("β = Φ(z − δ) − Φ(−z − δ) = Φ(" + fmt(z - delta, 3) + ") − Φ(" + fmt(-z - delta, 3) +
+         ") = " + fmt(upper, 4) + " − " + fmt(lower, 4) + " = <b>" + fmt(beta, 4) + "</b>"));
+    if(lower < 0.0005){
+      steps.push('<span class="note">The second term is essentially zero — the shifted curve ' +
+        "has no meaningful area below the lower limit, so there is nothing to deduct. That is " +
+        "the step the deck notes as “no area outside LCL”.</span>");
+    }
+    steps.push("The chance of catching the shift on any one sample is " +
+      ex("1 − β = " + fmt(1 - beta, 4)) + ", so on average it takes about " +
+      ex(String(Math.max(1, Math.round(1/Math.max(1 - beta, 1e-9))))) + " samples to detect it.");
+  }
+  document.getElementById("simWork").innerHTML = workList(steps);
+}
+
+
+/* ============================================================
+   7c. Start here — the student's own data, and their own chart choice
+   ============================================================ */
+
+/** Split a pasted block into a grid of numbers. Tabs, commas, spaces, new lines. */
+function parseBlock(text){
+  var rows = [], lines = text.split(/\r?\n/), i;
+  for(i = 0; i < lines.length; i++){
+    var cells = lines[i].split(/[\t,;]+|\s{1,}/)
+                        .map(function(t){ return parseFloat(t); })
+                        .filter(function(v){ return !isNaN(v); });
+    if(cells.length) rows.push(cells);
+  }
+  return rows;
+}
+
+/** Rows as pasted, or transposed so that each inner array is one sample. */
+function orientGrid(rows, orientation){
+  if(orientation === "samples") return rows;
+  var out = [], cols = Math.max.apply(null, rows.map(function(r){ return r.length; })), c, r;
+  for(c = 0; c < cols; c++){
+    var col = [];
+    for(r = 0; r < rows.length; r++) if(rows[r][c] !== undefined) col.push(rows[r][c]);
+    if(col.length) out.push(col);
+  }
+  return out;
+}
+
+var START = {grid:[], flat:[], kind:"measured", n:100, z:3};
+
+function stRead(){
+  var raw = parseBlock(document.getElementById("stData").value);
+  var grid = orientGrid(raw, document.getElementById("stOrient").value);
+  START.grid = grid;
+
+  var host = document.getElementById("stGrid");
+  if(!grid.length){
+    host.innerHTML = "";
+    document.getElementById("stShape").textContent = "Nothing read yet.";
+    return;
+  }
+  var widths = grid.map(function(g){ return g.length; });
+  var maxw = Math.max.apply(null, widths), minw = Math.min.apply(null, widths);
+  document.getElementById("stShape").innerHTML =
+    "<b>" + grid.length + "</b> samples" +
+    (maxw === minw ? ", <b>" + maxw + "</b> value" + (maxw === 1 ? "" : "s") + " each"
+                   : ", between " + minw + " and " + maxw + " values each");
+
+  var h = '<table class="dataT"><tr><th>Sample</th>';
+  for(var c = 0; c < maxw; c++) h += "<th>" + (c + 1) + "</th>";
+  h += "</tr>";
+  for(var r = 0; r < grid.length; r++){
+    h += '<tr><td class="jb">' + (r + 1) + "</td>";
+    for(var c2 = 0; c2 < maxw; c2++){
+      h += "<td>" + (grid[r][c2] === undefined ? "" : grid[r][c2]) + "</td>";
+    }
+    h += "</tr>";
+  }
+  host.innerHTML = h + "</table>";
+}
+
+/**
+ * What the declared chart does not fit about this data.
+ * Nothing here blocks the plot — the chart is drawn either way, and the notes
+ * appear underneath it so a wrong choice can be seen as well as read about.
+ */
+function chartWarnings(kind, grid, n){
+  var flat = [], i, j;
+  for(i = 0; i < grid.length; i++) for(j = 0; j < grid[i].length; j++) flat.push(grid[i][j]);
+  var widths = grid.map(function(g){ return g.length; });
+  var maxw = Math.max.apply(null, widths);
+  var allWhole = flat.every(function(v){ return Math.abs(v - Math.round(v)) < 1e-9; });
+  var out = [];
+
+  if(kind === "measured"){
+    if(maxw < 2){
+      out.push("An x̄ and R chart needs more than one measurement per sample — with a single " +
+               "value there is no range to plot and no spread to estimate. Either your samples " +
+               "have more readings than were pasted, or these numbers are counts, not measurements.");
+    }
+    if(allWhole && maxw === 1){
+      out.push("Every value is a whole number and there is one per sample, which is what counted " +
+               "data looks like. If each number is a count of something, this is the wrong chart.");
+    }
+  }
+
+  if(kind === "p"){
+    if(maxw > 1){
+      out.push("A p-chart takes one number per sample — how many items failed. You have " + maxw +
+               " values per row, which suggests these are measurements rather than counts.");
+    }
+    if(!allWhole){
+      out.push("Some values are not whole numbers. A count of defective items cannot be " +
+               "fractional, so either these are already proportions, or they are measurements.");
+    }
+    var over = flat.filter(function(v){ return v > n; }).length;
+    if(over){
+      out.push(over + " value" + (over === 1 ? " is" : "s are") + " larger than the sample size " +
+               "n = " + n + ". You cannot have more defective items than you inspected, so either " +
+               "n is wrong or these are not defective counts.");
+    }
+  }
+
+  if(kind === "c"){
+    if(maxw > 1){
+      out.push("A c-chart takes one number per unit inspected. You have " + maxw + " values per " +
+               "row, which suggests these are measurements rather than counts of faults.");
+    }
+    if(!allWhole){
+      out.push("Some values are not whole numbers. Defects are counted, so a c-chart's data " +
+               "should be whole numbers.");
+    }
+  }
+  return out;
+}
+
+function renderWarnings(list, where){
+  var host = document.getElementById(where);
+  if(!list.length){ host.innerHTML = ""; return; }
+  var h = '<div class="pattern flag"><div class="ttl">This chart does not fit the data you ' +
+          'declared</div><ol class="qs">';
+  for(var i = 0; i < list.length; i++) h += "<li>" + list[i] + "</li>";
+  host.innerHTML = h + "</ol><div class=\"hint\" style=\"margin-top:6px\">The chart below was " +
+    "drawn anyway, so you can see what a wrong choice looks like. Go back to <b>Start here</b> " +
+    "to change it.</div></div>";
+}
+
+/** Hand the data to whichever chart the student declared, and switch to it. */
+function stPlot(){
+  stRead();
+  var grid = START.grid;
+  if(!grid.length){ return; }
+  var kind = document.querySelector('input[name="stKind"]:checked').value;
+  var n = parseInt(document.getElementById("stN").value, 10) || 100;
+  var z = parseFloat(document.getElementById("stZ").value) || 3;
+  var warnings = chartWarnings(kind, grid, n);
+
+  // keep it, so "Your data from Start here" can restore it on either chart tab
+  START.flat = [];
+  for(var g = 0; g < grid.length; g++) START.flat = START.flat.concat(grid[g]);
+  START.kind = kind; START.n = n; START.z = z;
+
+  if(kind === "measured"){
+    // the x-bar grid is laid out with observations down the page, so transpose back
+    var width = Math.max.apply(null, grid.map(function(g){ return g.length; }));
+    var padded = grid.map(function(g){
+      var row = g.slice();
+      while(row.length < width) row.push(row[row.length - 1]);
+      return row;
+    });
+    START.padded = padded;
+    xbRenderGrid(padded);
+    document.getElementById("xbPreset").value = "input";
+    document.getElementById("xbZ").value = z;
+    xbCompute();
+    renderWarnings(warnings, "xbWarn");
+    setTab("xbar");
+  } else {
+    var flat = [];
+    for(var i = 0; i < grid.length; i++) flat = flat.concat(grid[i]);
+    document.getElementById("atType").value = kind;
+    atFillPresets();
+    document.getElementById("atPreset").value = "input";
+    document.getElementById("atData").value = flat.join(", ");
+    document.getElementById("atN").value = n;
+    document.getElementById("atBy").value = "z";
+    document.getElementById("atZ").value = z;
+    atRun();
+    renderWarnings(warnings, "atWarn");
+    setTab("attr");
+  }
+  // whichever chart was chosen, the run test works on what is plotted
+  rtSyncFromChart(kind);
+}
+
+
+/* ============================================================
+   7d. Run test — the full test, on whatever is currently plotted
+   ============================================================ */
+
+function markAboveBelow(values, median, tieRule){
+  var marks = [];
+  for(var i = 0; i < values.length; i++){
+    if(values[i] > median)      marks.push("A");
+    else if(values[i] < median) marks.push("B");
+    else                        marks.push(tieRule === "drop" ? null : tieRule);
+  }
+  return marks;
+}
+
+function markUpDown(values, tieRule){
+  var marks = [null];
+  for(var i = 1; i < values.length; i++){
+    if(values[i] > values[i - 1])      marks.push("U");
+    else if(values[i] < values[i - 1]) marks.push("D");
+    else                               marks.push(tieRule === "drop" ? null : tieRule);
+  }
+  return marks;
+}
+
+function expectedAB(N){ return {exp:N/2 + 1, sd:Math.sqrt((N - 1)/4)}; }
+function expectedUD(N){ return {exp:(2*N - 1)/3, sd:Math.sqrt((16*N - 29)/90)}; }
+
+function runTest(values, median, tieAB, tieUD){
+  var mAB = markAboveBelow(values, median, tieAB);
+  var mUD = markUpDown(values, tieUD);
+  var nAB = mAB.filter(function(m){ return m !== null; }).length;
+  var nUD = mUD.filter(function(m){ return m !== null; }).length + 1;
+  var rAB = countRuns(mAB), rUD = countRuns(mUD);
+  var eAB = expectedAB(nAB), eUD = expectedUD(nUD);
+  return {marksAB:mAB, marksUD:mUD,
+          ab:{runs:rAB, N:nAB, exp:eAB.exp, sd:eAB.sd, z:(rAB - eAB.exp)/eAB.sd},
+          ud:{runs:rUD, N:nUD, exp:eUD.exp, sd:eUD.sd, z:(rUD - eUD.exp)/eUD.sd}};
+}
+
+/** Pull the plotted series across from whichever chart was just drawn. */
+function rtSyncFromChart(kind){
+  var values = null, label = "";
+  if(kind === "measured" && window.__xb){
+    values = window.__xb.means;
+    label = "The sample means from your x̄ chart.";
+  } else if(window.__at){
+    values = window.__at.props;
+    label = (document.getElementById("atType").value === "p")
+      ? "The proportions from your p-chart." : "The counts from your c-chart.";
+  }
+  if(!values) return;
+  document.getElementById("rtData").value =
+    values.map(function(v){ return Number(v.toFixed(4)); }).join(", ");
+  document.getElementById("rtSource").textContent = label +
+    " A control chart can pass every limit and still show a pattern.";
+  rtRender();
+}
+
+function rtValues(){ return parseNumbers(document.getElementById("rtData").value); }
+
+function rtMedian(values){
+  return (document.getElementById("rtMedMode").value === "manual")
+    ? parseFloat(document.getElementById("rtMedVal").value)
+    : medianOf(values);
+}
+
+function rtRender(){
+  var values = rtValues();
+  if(values.length < 3) return;
+  var median = rtMedian(values);
+  var zcrit = Math.abs(parseFloat(document.getElementById("rtZcrit").value)) || 2;
+  var r = runTest(values, median,
+                  document.getElementById("rtTieAB").value,
+                  document.getElementById("rtTieUD").value);
+  window.__rt = r;
+
+  // the marking table
+  var h = '<table class="dataT"><tr><th>Sample</th>';
+  var i;
+  for(i = 0; i < values.length; i++) h += "<th>" + (i + 1) + "</th>";
+  h += '</tr><tr><td class="jb">Value</td>';
+  for(i = 0; i < values.length; i++) h += "<td>" + values[i] + "</td>";
+  h += "</tr>";
+  function markRow(label, marks){
+    var out = '<tr><td class="jb">' + label + "</td>", prev = null;
+    for(var j = 0; j < marks.length; j++){
+      var m = marks[j];
+      var cls = (m === "A" || m === "U") ? "above" : (m === "B" || m === "D") ? "below" : "tie";
+      var brk = (m !== null && prev !== null && m !== prev) ? " brk" : "";
+      if(m !== null) prev = m;
+      out += '<td class="' + cls + brk + '">' + (m === null ? "—" : m) + "</td>";
+    }
+    return out + "</tr>";
+  }
+  h += markRow("A/B", r.marksAB) + markRow("U/D", r.marksUD) + "</table>";
+  document.getElementById("rtTable").innerHTML = h;
+
+  var abBad = Math.abs(r.ab.z) > zcrit, udBad = Math.abs(r.ud.z) > zcrit;
+  document.getElementById("rtStatsAB").innerHTML =
+    statTile("Observed runs", r.ab.runs) + statTile("Expected", fmt(r.ab.exp, 2)) +
+    statTile("Std deviation", fmt(r.ab.sd, 3)) + statTile("z", fmt(r.ab.z, 2), abBad ? "bad" : "good");
+  document.getElementById("rtExplAB").innerHTML =
+    "With N = " + r.ab.N + ", a random process gives <b>N/2 + 1 = " + fmt(r.ab.exp, 2) +
+    "</b> runs, standard deviation <b>&radic;((N&minus;1)/4) = " + fmt(r.ab.sd, 3) +
+    "</b>, so z = <b>" + fmt(r.ab.z, 2) + "</b>.";
+
+  document.getElementById("rtStatsUD").innerHTML =
+    statTile("Observed runs", r.ud.runs) + statTile("Expected", fmt(r.ud.exp, 2)) +
+    statTile("Std deviation", fmt(r.ud.sd, 3)) + statTile("z", fmt(r.ud.z, 2), udBad ? "bad" : "good");
+  document.getElementById("rtExplUD").innerHTML =
+    "With N = " + r.ud.N + ", the expected number of up/down runs is <b>(2N&minus;1)/3 = " +
+    fmt(r.ud.exp, 2) + "</b>, standard deviation <b>" + fmt(r.ud.sd, 3) + "</b>, so z = <b>" +
+    fmt(r.ud.z, 2) + "</b>.";
+
+  var msg = (!abBad && !udBad)
+    ? "Both z values sit inside &plusmn;" + zcrit + ", so there is no evidence of a non-random pattern."
+    : "Assignable cause indicated" +
+      (abBad ? " by the above/below test (z = " + fmt(r.ab.z, 2) + ")" : "") +
+      (abBad && udBad ? " and" : "") +
+      (udBad ? " by the up/down test (z = " + fmt(r.ud.z, 2) + ")" : "") +
+      ". This is a signal even if every point sits inside the control limits.";
+  document.getElementById("rtVerdict").innerHTML =
+    '<div class="verdict ' + ((abBad || udBad) ? "outCtl" : "inCtl") + '">' + msg + "</div>";
+
+  rtTieTable(values, median, zcrit);
+}
+
+/** Every tie convention side by side — it matters most for count data. */
+function rtTieTable(values, median, zcrit){
+  var rulesAB = [["drop", "drop the point"], ["A", "count as above"], ["B", "count as below"]];
+  var rulesUD = [["drop", "drop the point"], ["U", "count as up"], ["D", "count as down"]];
+  var hasTie = values.some(function(v){ return v === median; }) ||
+               values.some(function(v, i){ return i > 0 && v === values[i - 1]; });
+  var host = document.getElementById("rtTieTable");
+  if(!hasTie){
+    host.innerHTML = '<p class="hint">This series has no ties, so every convention gives the ' +
+                     "same answer.</p>";
+    return;
+  }
+  var h = '<table class="dataT"><tr><th>A/B tie rule</th><th>U/D tie rule</th><th>runs A/B</th>' +
+          "<th>z</th><th>runs U/D</th><th>z</th><th>conclusion</th></tr>";
+  for(var a = 0; a < rulesAB.length; a++){
+    for(var b = 0; b < rulesUD.length; b++){
+      var r = runTest(values, median, rulesAB[a][0], rulesUD[b][0]);
+      var bad = Math.abs(r.ab.z) > zcrit || Math.abs(r.ud.z) > zcrit;
+      h += '<tr><td class="jb">' + rulesAB[a][1] + '</td><td class="jb">' + rulesUD[b][1] +
+           "</td><td>" + r.ab.runs + "</td><td>" + fmt(r.ab.z, 2) + "</td><td>" + r.ud.runs +
+           "</td><td>" + fmt(r.ud.z, 2) + '</td><td class="' + (bad ? "tie" : "") + '">' +
+           (bad ? "pattern" : "random") + "</td></tr>";
+    }
+  }
+  host.innerHTML = h + "</table>";
+}
+
+function simStart(){
+  var btn = document.getElementById("simRun");
+  if(sim.timer){
+    clearInterval(sim.timer); sim.timer = null; btn.textContent = "Start";
+    btn.classList.add("primary");
+    return;
+  }
+  var speed = parseInt(document.getElementById("simSpeed").value, 10);
+  sim.timer = setInterval(simDraw, speed);
+  btn.textContent = "Pause";
+  btn.classList.remove("primary");
+}
+
+function simReset(){
+  if(sim.timer){ clearInterval(sim.timer); sim.timer = null; }
+  document.getElementById("simRun").textContent = "Start";
+  document.getElementById("simRun").classList.add("primary");
+  sim.points = []; sim.falseAlarms = 0; sim.misses = 0;
+  sim.inCtlPoints = 0; sim.shiftedPoints = 0;
+  document.getElementById("simChart").innerHTML = "";
+  simRender();
+}
+
+/* ============================================================
+   7. Tab 4 — process capability
+   ============================================================ */
+
+var CP_PRESETS = {
+  caseSpec:  {mu:0.40, sd:0.046, l:0.20, u:0.60}, // the group case; replace mean and σ with your line's
+  wine:      {mu:500, sd:3.333, l:490, u:510},
+  wineShift: {mu:495, sd:3,     l:490, u:510},
+  g1:        {mu:7.5, sd:0.10,  l:7.0, u:8.0},
+  g2:        {mu:4.6, sd:0.12,  l:4.3, u:4.9},
+  g3:        {mu:6.0, sd:0.14,  l:5.5, u:6.7}
+};
+
+function computeCapability(mu, sd, lsl, usl){
+  var cp = (usl - lsl)/(6*sd);
+  var cpu = (usl - mu)/(3*sd), cpl = (mu - lsl)/(3*sd);
+  var cpk = Math.min(cpu, cpl);
+  var ppm = 1e6*(normalCdf((lsl - mu)/sd) + (1 - normalCdf((usl - mu)/sd)));
+  return {cp:cp, cpu:cpu, cpl:cpl, cpk:cpk, ppm:ppm, sigmaLevel:cpk*3};
+}
+
+/** Bell curve against the specification band. */
+function drawCapability(host, mu, sd, lsl, usl){
+  var W = 760, H = 260, ml = 40, mr = 40, mt = 22, mb = 34;
+  var plotW = W - ml - mr, plotH = H - mt - mb;
+  var lo = Math.min(lsl, mu - 4*sd) - sd*0.6, hi = Math.max(usl, mu + 4*sd) + sd*0.6;
+  function x(v){ return ml + plotW*(v - lo)/(hi - lo); }
+  var peak = 1/(sd*Math.sqrt(2*Math.PI));
+  function y(d){ return mt + plotH*(1 - d/peak*0.92); }
+
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="process against specification">';
+  // in-specification band
+  s += '<rect x="' + x(lsl) + '" y="' + mt + '" width="' + (x(usl) - x(lsl)) + '" height="' + plotH +
+       '" fill="var(--ok-soft)"/>';
+  // the distribution
+  var d = "", v, i, dens;
+  for(i = 0; i <= 220; i++){
+    v = lo + (hi - lo)*i/220;
+    dens = Math.exp(-0.5*Math.pow((v - mu)/sd, 2))/(sd*Math.sqrt(2*Math.PI));
+    d += (i ? " L" : "M") + x(v).toFixed(1) + " " + y(dens).toFixed(1);
+  }
+  s += '<path d="' + d + '" fill="none" stroke="var(--accent)" stroke-width="2"/>';
+  // baseline and spec lines
+  s += '<line x1="' + ml + '" y1="' + (mt + plotH) + '" x2="' + (ml + plotW) + '" y2="' +
+       (mt + plotH) + '" stroke="var(--line)" stroke-width="1.5"/>';
+  function vline(v, colour, label, dash){
+    return '<line x1="' + x(v) + '" y1="' + mt + '" x2="' + x(v) + '" y2="' + (mt + plotH) +
+           '" stroke="' + colour + '" stroke-width="2" stroke-dasharray="' + (dash || "0") + '"/>' +
+           '<text x="' + x(v) + '" y="' + (mt - 6) + '" text-anchor="middle" font-size="12.5" ' +
+           'font-weight="700" fill="' + colour + '">' + label + "</text>";
+  }
+  s += vline(lsl, "var(--bad)", "LSL " + lsl, "6 4");
+  s += vline(usl, "var(--bad)", "USL " + usl, "6 4");
+  s += vline(mu, "var(--muted)", "mean " + mu, "0");
+  s += '<text x="' + (ml + plotW/2) + '" y="' + (H - 4) + '" text-anchor="middle" font-size="12" ' +
+       'fill="var(--muted)">Measured value</text>';
+  s += "</svg>";
+  host.innerHTML = s;
+}
+
+
+/** Capability, step by step against the specification. */
+function renderCpWorking(mu, sd, lsl, usl, r){
+  var steps = [];
+  steps.push("The specification is " + ex(fmt(lsl, 2) + " to " + fmt(usl, 2)) + ", a width of " +
+    ex(fmt(usl - lsl, 3)) + ". The process occupies " + ex("6σ = 6 × " + fmt(sd, 4) + " = " +
+    fmt(6*sd, 4)) + ' <span class="note">— three standard deviations either side of its mean.</span>');
+  steps.push("<b>C" + "\u209A</b> compares those two widths and ignores where the process sits: " +
+    ex("Cₚ = (USL − LSL) / 6σ = " + fmt(usl - lsl, 3) + " / " + fmt(6*sd, 4) + " = <b>" +
+       fmt(r.cp, 3) + "</b>"));
+  steps.push("<b>C" + "\u209A\u2096</b> asks how much room is left on the tighter side. " +
+    "Upper side: " + ex("(USL − mean) / 3σ = (" + fmt(usl, 2) + " − " + fmt(mu, 2) + ") / " +
+    fmt(3*sd, 4) + " = " + fmt(r.cpu, 3)) + ". Lower side: " +
+    ex("(mean − LSL) / 3σ = (" + fmt(mu, 2) + " − " + fmt(lsl, 2) + ") / " + fmt(3*sd, 4) +
+       " = " + fmt(r.cpl, 3)));
+  steps.push("The smaller of the two is what the process can promise: " +
+    ex("Cₚₖ = min(" + fmt(r.cpu, 3) + ", " + fmt(r.cpl, 3) + ") = <b>" + fmt(r.cpk, 3) + "</b>") +
+    (Math.abs(r.cp - r.cpk) < 0.005
+      ? '. <span class="note">Cₚ and Cₚₖ are equal, so the process is centred in the specification.</span>'
+      : '. <span class="note">Cₚₖ is below Cₚ, which is the signature of an off-centre process.</span>'));
+  steps.push("Area of the curve outside the specification, the expected defect rate: " +
+    ex(Math.round(r.ppm).toLocaleString() + " ppm") + " — that is " +
+    ex(fmt(r.ppm/10000, 4) + "%") + " of output.");
+  document.getElementById("cpWork").innerHTML = workList(steps);
+}
+
+function cpCompute(){
+  var mu = parseFloat(document.getElementById("cpMu").value);
+  var sd = parseFloat(document.getElementById("cpSd").value);
+  var l  = parseFloat(document.getElementById("cpL").value);
+  var u  = parseFloat(document.getElementById("cpU").value);
+  if(!isFinite(mu) || !isFinite(sd) || sd <= 0 || !isFinite(l) || !isFinite(u) || u <= l) return;
+
+  var r = computeCapability(mu, sd, l, u);
+  window.__cp = r;
+
+  var res = document.getElementById("cpResult");
+  var capable = r.cpk >= 1.33;
+  var marginal = r.cpk >= 1 && r.cpk < 1.33;
+  var verdictClass = capable ? "inCtl" : "outCtl";
+  var verdictText;
+  if(capable){
+    verdictText = "Capable — C\u209A\u2096 of " + fmt(r.cpk, 2) + " clears the usual 1.33 minimum.";
+  } else if(marginal){
+    verdictText = "Marginal — C\u209A\u2096 of " + fmt(r.cpk, 2) +
+      " means the spread fits the specification exactly, with no margin for drift. " +
+      "The accepted minimum is 1.33.";
+  } else {
+    verdictText = "Not capable — C\u209A\u2096 of " + fmt(r.cpk, 2) +
+      " is below 1.00. " +
+      (r.cp >= 1.33
+        ? "C\u209A of " + fmt(r.cp, 2) + " is fine, so the spread is not the problem \u2014 " +
+          "the process is off centre, and re-centring it would make it capable."
+        : "C\u209A of " + fmt(r.cp, 2) + " is short too, so the spread itself is wider than " +
+          "the specification allows and re-centring alone would not be enough.");
+  }
+  res.innerHTML =
+    '<div class="stats">' +
+      statTile("C<sub>p</sub>", fmt(r.cp, 3)) +
+      statTile("C<sub>pu</sub>", fmt(r.cpu, 3)) +
+      statTile("C<sub>pl</sub>", fmt(r.cpl, 3)) +
+      statTile("C<sub>pk</sub>", fmt(r.cpk, 3), capable ? "good" : (marginal ? "warnS" : "bad")) +
+      statTile("Defect rate", Math.round(r.ppm).toLocaleString() + " ppm") +
+    "</div>" +
+    '<div class="verdict ' + verdictClass + '">' + verdictText + "</div>";
+
+  renderCpWorking(mu, sd, l, u, r);
+  drawCapability(document.getElementById("cpChart"), mu, sd, l, u);
+  document.getElementById("cpCap").textContent =
+    "Shaded band is the specification. Area of the curve outside it is the defect rate.";
+}
+
+/* ============================================================
+   8. Wiring
+   ============================================================ */
+
+function loadXbPreset(){
+  var key = document.getElementById("xbPreset").value;
+  if(key === "input"){
+    if(START.padded && START.padded.length){
+      xbRenderGrid(START.padded);
+      document.getElementById("xbK").value = START.padded.length;
+      document.getElementById("xbN").value = START.padded[0].length;
+    } else {
+      document.getElementById("xbGrid").innerHTML =
+        '<p class="hint">Nothing pasted yet — go to <b>Start here</b>, paste your data and ' +
+        "press <b>Plot it</b>.</p>";
+      return;
+    }
+  } else if(key === "blank"){
+    var k = parseInt(document.getElementById("xbK").value, 10) || 5;
+    var n = parseInt(document.getElementById("xbN").value, 10) || 4;
+    var blank = [], i, j;
+    for(j = 0; j < k; j++){
+      blank.push([]);
+      for(i = 0; i < n; i++) blank[j].push(0);
+    }
+    xbRenderGrid(blank);
+  } else {
+    var p = XB_PRESETS[key];
+    document.getElementById("xbK").value = p.data.length;
+    document.getElementById("xbN").value = p.n;
+    document.getElementById("xbSigma").value = p.sigma;
+    xbRenderGrid(p.data);
+  }
+  xbCompute();
+}
+
+function init(){
+  // tabs and mode
+  document.getElementById("viewSeg").addEventListener("click", function(e){
+    var b = e.target.closest("button");
+    if(b) setView(b.dataset.view);
+  });
+  document.getElementById("tabbar").addEventListener("click", function(e){
+    var b = e.target.closest("button");
+    if(b) setTab(b.dataset.tab);
+  });
+  // tab 1
+  document.getElementById("xbPreset").addEventListener("change", loadXbPreset);
+  document.getElementById("xbResize").addEventListener("click", function(){
+    document.getElementById("xbPreset").value = "blank";
+    loadXbPreset();
+  });
+  document.getElementById("xbMethod").addEventListener("change", function(){
+    document.getElementById("xbSigmaFld").classList.toggle("hidden", this.value !== "sigma");
+    xbCompute();
+  });
+
+  document.getElementById("xbSigma").addEventListener("input", xbCompute);
+  document.getElementById("xbZ").addEventListener("input", xbCompute);
+  document.getElementById("xbSigmaFld").classList.add("hidden");
+
+  // tab 2
+  document.getElementById("atType").addEventListener("change", atFillPresets);
+  document.getElementById("atPreset").addEventListener("change", atLoadPreset);
+  document.getElementById("atBy").addEventListener("change", atRun);
+  ["atN", "atZ", "atAlpha", "atPct", "atData"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", atRun);
+  });
+  document.getElementById("atRun").addEventListener("click", atRun);
+
+  // tab 3
+  ["simMu0", "simSd", "simN", "simZ"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", simRender);
+  });
+  document.getElementById("simShift").addEventListener("input", simRender);
+  document.getElementById("simRun").addEventListener("click", simStart);
+  document.getElementById("simStep").addEventListener("click", simDraw);
+  document.getElementById("simReset").addEventListener("click", simReset);
+  document.getElementById("simSpeed").addEventListener("change", function(){
+    if(sim.timer){ simStart(); simStart(); }
+  });
+
+  // tab 4
+  document.getElementById("cpPreset").addEventListener("change", function(){
+    var p = CP_PRESETS[this.value];
+    document.getElementById("cpMu").value = p.mu;
+    document.getElementById("cpSd").value = p.sd;
+    document.getElementById("cpL").value = p.l;
+    document.getElementById("cpU").value = p.u;
+    cpCompute();
+  });
+  ["cpMu", "cpSd", "cpL", "cpU"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", cpCompute);
+  });
+  // capability needs a mean and a sigma; both are already estimated on the first tab
+  document.getElementById("cpFromChart").addEventListener("click", function(){
+    var r = window.__xb;
+    if(!r || !isFinite(r.sigmaHat)){ return; }
+    document.getElementById("cpMu").value = r.grand.toFixed(3);
+    document.getElementById("cpSd").value = r.sigmaHat.toFixed(3);
+    cpCompute();
+  });
+
+  // start here
+  document.getElementById("stRead").addEventListener("click", stRead);
+  document.getElementById("stOrient").addEventListener("change", stRead);
+  document.getElementById("stPlot").addEventListener("click", stPlot);
+  document.getElementById("stPreset").addEventListener("click", function(){ setTab("xbar"); });
+  ["stZ", "stN"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", function(){});
+  });
+
+  // run test
+  ["rtData", "rtMedVal", "rtZcrit"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", rtRender);
+  });
+  ["rtTieAB", "rtTieUD"].forEach(function(id){
+    document.getElementById(id).addEventListener("change", rtRender);
+  });
+  document.getElementById("rtMedMode").addEventListener("change", function(){
+    document.getElementById("rtMedFld").classList.toggle("hidden", this.value !== "manual");
+    rtRender();
+  });
+
+  document.getElementById("xbPreset").value = "deck";
+  loadXbPreset();
+  atFillPresets();
+  cpCompute();
+  simRender();
+
+  if(location.search.indexOf("test") >= 0 || location.hash.indexOf("test") >= 0) runTests();
+}
+
+/* ============================================================
+   9. Acceptance checks — open with ?test and read the console
+   ============================================================ */
+
+function runTests(){
+  var results = [];
+
+  /** Find a preset by id, so adding presets never breaks these checks. */
+  function preset(kind, id){
+    var list = AT_PRESETS[kind], i;
+    for(i = 0; i < list.length; i++) if(list[i].id === id) return list[i];
+    throw new Error("no preset " + id);
+  }
+
+  function check(name, got, want, tol){
+    var ok = Math.abs(got - want) <= (tol === undefined ? 0.005 : tol);
+    results.push({test:name, got:Number(got.toFixed(5)), expected:want, pass:ok});
+  }
+
+  // deck x-bar example, sigma known = 0.02, n = 4, z = 3
+  var deck = XB_PRESETS.deck.data;
+  var r1 = computeXbarR(deck, true, 0.02, 3);
+  check("deck grand mean", r1.grand, 12.1105, 0.001);
+  check("deck UCL (sigma known)", r1.uclX, 12.1405, 0.001);
+  check("deck R-bar", r1.rbar, 0.046, 0.001);
+
+  // same data, limits from the range
+  var r2 = computeXbarR(deck, false, 0, 3);
+  check("A2 R-bar UCL", r2.uclX, 12.1105 + 0.729*0.046, 0.001);
+  check("R chart UCL", r2.uclR, 2.282*0.046, 0.001);
+
+  // billing statements p-chart, 220 defectives in 2000
+  var p = computePChart(preset("p", "billing").data, 100, 3);
+  check("p-bar", p.centre, 0.11, 0.0005);
+  check("p UCL", p.ucl, 0.2039, 0.001);
+  check("p LCL", p.lcl, 0.0161, 0.001);
+
+  // chips: limits 0.047 / 0.003 correspond to z = 2
+  var chips = computePChart(preset("p", "chips").data, 200, 2);
+  check("chips UCL at z=2", chips.ucl, 0.047, 0.001);
+  check("chips LCL at z=2", chips.lcl, 0.003, 0.001);
+  check("alpha at z=2", 2*(1 - normalCdf(2)), 0.0455, 0.001);
+  check("z for alpha 0.03", normalInv(1 - 0.015), 2.17, 0.01);
+
+  // wire rolls c-chart
+  var c = computeCChart(preset("c", "wire").data, 3);
+  check("c-bar", c.centre, 2.5, 0.001);
+  check("c UCL", c.ucl, 2.5 + 3*Math.sqrt(2.5), 0.001);
+  check("c LCL floored", c.lcl, 0, 0.001);
+
+  // capability
+  var w = computeCapability(500, 10/3, 490, 510);
+  check("wine Cp", w.cp, 1.0, 0.005);
+  var ws = computeCapability(495, 3, 490, 510);
+  check("shifted Cpk", ws.cpk, 5/9, 0.005);
+  var g3 = computeCapability(6.0, 0.14, 5.5, 6.7);
+  check("group process 3 Cpk", g3.cpk, 1.190, 0.005);
+
+  // Type II for the bottle line: n=9, sd=5, z=3, shift to 506
+  var se = 5/3, delta = 6/se;
+  check("beta at 506", normalCdf(3 - delta) - normalCdf(-3 - delta), 0.2743, 0.002);
+
+  // the six packaging datasets for group case 2, checked against their intended fault
+  var CASE2 = [
+    {id:"case2P1", kind:"p", n:100, outside:0},
+    {id:"case2P2", kind:"p", n:100, outside:1},
+    {id:"case2P3", kind:"p", n:100, outside:2},
+    {id:"case2C1", kind:"c", n:0,   outside:0},
+    {id:"case2C2", kind:"c", n:0,   outside:1},
+    {id:"case2C3", kind:"c", n:0,   outside:2}
+  ];
+  CASE2.forEach(function(t){
+    var d = preset(t.kind, t.id).data;
+    var r = (t.kind === "p") ? computePChart(d, t.n, 3) : computeCChart(d, 3);
+    var n = 0;
+    for(var i = 0; i < r.props.length; i++){
+      if(r.props[i] > r.ucl || r.props[i] < r.lcl) n++;
+    }
+    results.push({test:t.id + " points outside limits", got:n, expected:t.outside, pass:n === t.outside});
+  });
+
+  console.table(results);
+  var failed = results.filter(function(r){ return !r.pass; });
+  console.log(failed.length ? failed.length + " CHECK(S) FAILED" : "all " + results.length + " checks passed");
+  window.__testResults = results;
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
