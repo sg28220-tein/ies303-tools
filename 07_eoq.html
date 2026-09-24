@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EOQ Explorer — IES 303</title>
+<!--
+  EOQ teaching tool — IES 303 Engineering Management (SIIT), Lecture 07a Inventory Management.
+  Standalone page: open directly in any browser, no server needed.
+
+  Enter the demand, ordering cost and holding cost, then move Q with the slider.
+  Both graphs and the calculation update as the slider moves:
+    - the annual cost curves (holding, ordering, total) with Q marked on them
+    - the inventory level over time (the sawtooth) for the chosen Q
+
+  Formulas follow the deck (slides 10-18):
+    average inventory        Q/2
+    annual holding cost      (Q/2) h
+    annual ordering cost     (D/Q) S
+    total cost               (Q/2) h + (D/Q) S
+    EOQ                      Q0 = sqrt(2DS/h)
+    orders per year          D/Q
+    length of order cycle    working days per year / (D/Q)
+  D and h must be in the same time unit, so demand per month and holding cost per month
+  are converted to per year before anything is computed (slides 16-18). Holding cost can
+  also be given as a percentage of the unit price, h = i x P (slides 15 and 32).
+
+  Add ?test (or #test) to the URL to run the acceptance checks in the console.
+-->
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --ok:#16a34a;     --ok-soft:#f0fdf4;
+    --warn:#d97706;   --warn-soft:#fffbeb;
+    --bad:#dc2626;    --bad-soft:#fef2f2;
+    --grid:#eef1f4;
+    --hold:#16a34a; --order:#d97706; --total:#2563eb; --qline:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);
+       background:#fafafa;font-size:16px;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px}
+  header h1{margin:0;font-size:29px;font-weight:700}
+  header .sub{margin:4px 0 20px;color:var(--muted)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;
+        margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 10px;font-size:19px}
+  .hidden{display:none !important}
+  .hint{color:var(--muted);font-size:13.5px}
+  .row{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;margin:10px 0}
+  label.fld{display:flex;align-items:center;gap:7px;font-weight:600;font-size:15px}
+  label.fld i{font-family:Georgia,serif;font-size:17px}
+  select,input[type=number]{font:inherit;padding:6px 9px;border:1px solid var(--line);
+        border-radius:8px;background:#fff;color:var(--ink)}
+  input[type=number]{width:104px;text-align:center}
+  button{font:inherit;font-weight:600;padding:8px 15px;border:1px solid var(--line);border-radius:10px;
+         background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .warnBox{background:var(--bad-soft);color:var(--bad);border:1px solid #fecaca;border-radius:10px;
+           padding:10px 16px;font-weight:600;margin:10px 0}
+  .convert{background:var(--warn-soft);border-radius:10px;padding:9px 16px;font-size:15px;margin:10px 0}
+
+  /* the Q slider */
+  .qCard{position:relative;z-index:5}
+  .qRow{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center}
+  .qRow .qLabel{font-weight:700;font-size:18px;white-space:nowrap}
+  .qRow .qLabel i{font-family:Georgia,serif;font-size:21px}
+  input[type=range]{flex:1 1 320px;min-width:200px;height:34px;accent-color:var(--qline);cursor:pointer}
+  #qNum{width:110px;font-size:18px;font-weight:700}
+  .rangeEnds{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);
+             margin:-2px 0 0;padding:0 2px}
+
+  .stats{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 4px}
+  .stat{border:1px solid var(--line);border-radius:11px;padding:8px 16px;background:#fff;min-width:130px}
+  .stat .k{font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+  .stat .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat.hold .v{color:var(--hold)} .stat.order .v{color:var(--order)} .stat.total .v{color:var(--total)}
+  .stat.good .v{color:var(--ok)} .stat.bad .v{color:var(--bad)}
+
+  .verdict{border-radius:10px;padding:10px 16px;margin:10px 0 0;font-weight:600;font-size:16px}
+  .verdict.at{background:var(--ok-soft);color:var(--ok);border:1px solid #bbf7d0}
+  .verdict.off{background:var(--warn-soft);color:#92400e;border:1px solid #fde68a}
+
+  .chartBox{border:1px solid var(--line);border-radius:12px;background:#fff;padding:8px 6px 2px;margin:8px 0}
+  .chartBox svg{display:block;width:100%;height:auto}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;margin:0 0 4px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend b{display:inline-block;width:22px;height:0;border-top:3px solid}
+  .legend b.dash{border-top-style:dashed}
+
+  .twoCol{display:flex;gap:18px;flex-wrap:wrap}
+  .twoCol > div{flex:1 1 440px;min-width:0}
+
+  table.calc{border-collapse:collapse;font-size:15.5px;margin:10px 0;width:100%}
+  table.calc th{background:#f8fafc;color:var(--muted);font-size:13px;padding:7px 12px;
+                border:1px solid var(--line);text-align:left;white-space:nowrap}
+  table.calc td{padding:7px 12px;border:1px solid var(--line);font-variant-numeric:tabular-nums;
+                vertical-align:top}
+  table.calc td.f{font-family:Georgia,serif;white-space:nowrap}
+  table.calc td.ans{font-weight:700;text-align:right;white-space:nowrap}
+  table.calc tr.tot td{background:var(--accent-soft)}
+  table.calc td .sub{color:var(--muted)}
+  .scrollX{overflow-x:auto}
+
+  .explain{background:var(--accent-soft);border-radius:10px;padding:13px 18px;margin:12px 0;font-size:16px}
+  .explain b{color:var(--accent)}
+  .explain .eq{font-family:Georgia,serif;font-size:18px}
+
+  /* keep the slider in view while scrolling to the graphs on a wide screen */
+  @media (min-width:900px) and (min-height:700px){
+    .qCard{position:sticky;top:8px}
+  }
+
+  /* mouse only: hover effects (on touch screens they stick after a tap) */
+  @media (hover:hover){
+    button:hover{background:#f3f4f6}
+    button.primary:hover{background:#1d4ed8}
+  }
+
+  /* touch screens (iPad / iPhone); desktop with a mouse is unaffected */
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+  @media (pointer:coarse){
+    /* iOS zooms in on any text box under 16px and does not zoom back out */
+    input:not([type=checkbox]):not([type=radio]):not([type=range]), select{font-size:16px}
+    button, select{min-height:44px}
+    input[type=range]{height:44px}
+  }
+
+  /* phones */
+  @media screen and (max-width:640px){
+    .wrap{padding:16px 12px 48px}
+    .card{padding:16px 12px;border-radius:12px}
+    header h1{font-size:24px}
+    select{max-width:100%}
+    label.fld{flex-wrap:wrap;max-width:100%}
+    .stat{min-width:0;flex:1 1 120px}
+    .twoCol > div{flex-basis:100%}
+    .explain, .verdict{padding:12px 14px}
+  }
+
+  @media print{
+    body{background:#fff} .noprint{display:none !important}
+    .card{break-inside:avoid;box-shadow:none}
+    .qCard{position:static}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Economic Order Quantity (EOQ)</h1>
+  <p class="sub">IES 303 · Lecture 07a Inventory Management — move <i>Q</i> and watch holding cost, ordering cost and the inventory cycle respond</p>
+</header>
+
+<!-- 1. Parameters -->
+<section class="card">
+  <h2>1. Parameters</h2>
+  <div class="row">
+    <label class="fld">Demand <i>D</i>
+      <input type="number" id="inD" min="0" step="any">
+      <select id="inDPer">
+        <option value="year">units per year</option>
+        <option value="month">units per month</option>
+      </select>
+    </label>
+    <label class="fld">Ordering cost <i>S</i> $
+      <input type="number" id="inS" min="0" step="any"> <span class="hint">per order</span>
+    </label>
+  </div>
+  <div class="row">
+    <label class="fld">Holding cost <i>h</i>
+      <select id="inHMode">
+        <option value="year">$ per unit per year</option>
+        <option value="month">$ per unit per month</option>
+        <option value="pct">% of unit price per year</option>
+      </select>
+    </label>
+    <label class="fld" id="hAbsBox"><i>h</i> $
+      <input type="number" id="inH" min="0" step="any">
+    </label>
+    <label class="fld hidden" id="hPctBox1">Unit price <i>P</i> $
+      <input type="number" id="inP" min="0" step="any">
+    </label>
+    <label class="fld hidden" id="hPctBox2"><i>i</i>
+      <input type="number" id="inI" min="0" step="any"> %
+    </label>
+    <label class="fld">Working days per year
+      <input type="number" id="inDays" min="1" step="1">
+    </label>
+  </div>
+  <div id="convert" class="convert hidden"></div>
+  <div id="warn" class="warnBox hidden"></div>
+  <div class="row noprint">
+    <button id="btnExample">Load lecture example (slide 13)</button>
+    <span class="hint">D = 9,600 units/year · S = $75 · h = $16 per unit per year · 288 working days</span>
+  </div>
+</section>
+
+<!-- 2. The Q slider -->
+<section class="card qCard" id="qCard">
+  <div class="qRow">
+    <span class="qLabel">Order quantity <i>Q</i></span>
+    <input type="range" id="qSlider" min="1" max="100" step="1" aria-label="Order quantity Q">
+    <input type="number" id="qNum" min="1" step="1" aria-label="Order quantity Q (typed)">
+    <button class="primary noprint" id="btnSnap">Snap to EOQ</button>
+  </div>
+  <div class="rangeEnds"><span id="qMinLbl"></span><span id="qMaxLbl"></span></div>
+  <div class="stats">
+    <div class="stat"><div class="k">EOQ  Q₀</div><div class="v" id="stQ0">–</div></div>
+    <div class="stat hold"><div class="k">Holding  (Q/2)h</div><div class="v" id="stHold">–</div></div>
+    <div class="stat order"><div class="k">Ordering  (D/Q)S</div><div class="v" id="stOrder">–</div></div>
+    <div class="stat total"><div class="k">Total cost / year</div><div class="v" id="stTotal">–</div></div>
+    <div class="stat" id="stGapBox"><div class="k">Above minimum</div><div class="v" id="stGap">–</div></div>
+  </div>
+  <div id="verdict" class="verdict at"></div>
+</section>
+
+<!-- 3. Graphs -->
+<section class="card">
+  <h2>2. Graphs</h2>
+  <div class="twoCol">
+    <div>
+      <b>Annual cost vs order quantity</b>
+      <div class="legend">
+        <span><b style="border-color:var(--hold)"></b>Holding (Q/2)h</span>
+        <span><b style="border-color:var(--order)"></b>Ordering (D/Q)S</span>
+        <span><b style="border-color:var(--total)"></b>Total cost</span>
+        <span><b style="border-color:var(--qline)"></b>Your Q</span>
+        <span><b class="dash" style="border-color:var(--muted)"></b>EOQ</span>
+      </div>
+      <div class="chartBox" id="costChart"></div>
+    </div>
+    <div>
+      <b>Inventory level over time</b>
+      <div class="legend">
+        <span><b style="border-color:var(--qline)"></b>On hand at your Q</span>
+        <span><b class="dash" style="border-color:var(--qline)"></b>Average inventory Q/2</span>
+        <span><b style="border-color:#cbd5e1"></b>On hand at EOQ</span>
+      </div>
+      <div class="chartBox" id="sawChart"></div>
+    </div>
+  </div>
+  <p class="hint">The time axis is fixed at four EOQ cycles, and the height is fixed at the largest Q on
+    the slider. A bigger Q gives taller, wider teeth: fewer orders, more stock on hand.</p>
+</section>
+
+<!-- 4. Calculation -->
+<section class="card">
+  <h2>3. Calculation</h2>
+  <div class="explain" id="eoqLine"></div>
+  <div class="scrollX">
+    <table class="calc">
+      <thead><tr><th>Quantity</th><th>Formula</th><th colspan="2">At your Q</th><th>At EOQ</th></tr></thead>
+      <tbody id="calcBody"></tbody>
+    </table>
+  </div>
+  <p class="hint">At the EOQ, annual holding cost equals annual ordering cost (slide 10). Substituting
+    Q₀ back gives the minimum total cost TC* = √(2DSh) (slide 39).</p>
+</section>
+</div>
+
+<script>
+/* ============================================================
+   1. Settings and the lecture example
+   ============================================================ */
+
+var SLIDER_MIN_FRACTION = 0.1;  // slider runs from 0.1 x EOQ ...
+var SLIDER_MAX_FACTOR = 3;      // ... to 3 x EOQ
+var SAW_CYCLES = 4;             // the sawtooth window shows four EOQ cycles
+
+var EXAMPLE = {D:9600, dPer:"year", S:75, hMode:"year", h:16, P:180, i:20, days:288};
+
+var currentQ = null;            // the Q the slider is on
+
+/* ============================================================
+   2. Model — plain functions, one formula each
+   ============================================================ */
+
+/** Q0 = sqrt(2DS/h). D and h must be in the same time unit. */
+function eoq(D, S, h){
+  return Math.sqrt(2*D*S/h);
+}
+
+/** Every quantity the lecture asks for, at order size Q. D and h are per year. */
+function costsAt(Q, p){
+  var avgInv   = Q/2;
+  var orders   = p.D/Q;
+  var cycle    = p.days/orders;
+  var holding  = avgInv*p.h;
+  var ordering = orders*p.S;
+  return {Q:Q, avgInv:avgInv, orders:orders, cycle:cycle,
+          holding:holding, ordering:ordering, total:holding + ordering};
+}
+
+/** Minimum total cost TC* = sqrt(2DSh). */
+function minTotalCost(D, S, h){
+  return Math.sqrt(2*D*S*h);
+}
+
+/** Slider range around the EOQ. */
+function sliderRange(Q0){
+  var lo = Math.max(1, Math.round(Q0*SLIDER_MIN_FRACTION));
+  var hi = Math.max(lo + 10, Math.round(Q0*SLIDER_MAX_FACTOR));
+  return {min:lo, max:hi};
+}
+
+/* ============================================================
+   3. Reading the inputs
+   ============================================================ */
+
+function num(id){
+  var v = document.getElementById(id).value;
+  return v === "" ? NaN : Number(v);
+}
+
+/**
+ * Read the form and convert to per-year D and h.
+ * Returns {ok, D, S, h, days, notes[], error}.
+ */
+function readParams(){
+  var dRaw  = num("inD");
+  var dPer  = document.getElementById("inDPer").value;
+  var S     = num("inS");
+  var hMode = document.getElementById("inHMode").value;
+  var days  = num("inDays");
+  var notes = [];
+  var D, h;
+
+  D = (dPer === "month") ? dRaw*12 : dRaw;
+  if(dPer === "month" && dRaw > 0){
+    notes.push("D = " + fmt(dRaw) + " × 12 = " + fmt(D) + " units per year");
+  }
+
+  if(hMode === "pct"){
+    var P = num("inP"), i = num("inI");
+    h = i/100*P;
+    if(P > 0 && i > 0) notes.push("h = i × P = " + fmt(i) + "% × $" + fmt(P) + " = $" + fmt(h) + " per unit per year");
+  }else if(hMode === "month"){
+    var hm = num("inH");
+    h = hm*12;
+    if(hm > 0) notes.push("h = $" + fmt(hm) + " × 12 = $" + fmt(h) + " per unit per year");
+  }else{
+    h = num("inH");
+  }
+
+  var error = "";
+  if(!(D > 0))         error = "Demand D must be a positive number.";
+  else if(!(S > 0))    error = "Ordering cost S must be a positive number.";
+  else if(!(h > 0))    error = "Holding cost h must be a positive number.";
+  else if(!(days > 0)) error = "Working days per year must be a positive number.";
+
+  return {ok:error === "", D:D, S:S, h:h, days:days, notes:notes, error:error};
+}
+
+/* ============================================================
+   4. Formatting helpers
+   ============================================================ */
+
+function fmt(x, dp){
+  if(dp === undefined) dp = 2;
+  return x.toLocaleString("en-US", {maximumFractionDigits:dp});
+}
+
+function money(x){
+  return "$" + fmt(x, 2);
+}
+
+/** A round axis step giving about `count` intervals over `span`. */
+function niceStep(span, count){
+  var raw = span/count;
+  var mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  var n = raw/mag;
+  var step = n <= 1 ? 1 : (n <= 2 ? 2 : (n <= 5 ? 5 : 10));
+  return step*mag;
+}
+
+/** Axis label: drop decimals on big numbers, keep them on small ones. */
+function tickText(v){
+  return Math.abs(v) >= 1000 ? fmt(v, 0) : fmt(v, 2);
+}
+
+/* ============================================================
+   5. Graphs (inline SVG, drawn as strings)
+   ============================================================ */
+
+var CH = {W:560, H:330, ml:64, mr:16, mt:22, mb:44};
+
+function svgLine(x1, y1, x2, y2, stroke, width, dash){
+  return '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) +
+         '" y2="' + y2.toFixed(1) + '" stroke="' + stroke + '" stroke-width="' + width + '"' +
+         (dash ? ' stroke-dasharray="' + dash + '"' : "") + "/>";
+}
+
+function svgText(x, y, text, anchor, size, fill, weight){
+  return '<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" text-anchor="' + anchor +
+         '" font-size="' + size + '" fill="' + fill + '"' +
+         (weight ? ' font-weight="' + weight + '"' : "") + ">" + text + "</text>";
+}
+
+/** Grid, tick labels and axis titles shared by both graphs. */
+function drawAxes(xMax, yMax, xStep, yStep, x, y, xTitle, yTitle){
+  var s = "", v;
+  var plotR = CH.W - CH.mr, plotB = CH.H - CH.mb;
+  for(v = 0; v <= yMax + 1e-9; v += yStep){
+    s += svgLine(CH.ml, y(v), plotR, y(v), "var(--grid)", 1);
+    s += svgText(CH.ml - 8, y(v) + 4, tickText(v), "end", 11.5, "var(--muted)");
+  }
+  for(v = 0; v <= xMax + 1e-9; v += xStep){
+    s += svgLine(x(v), CH.mt, x(v), plotB, "var(--grid)", 1);
+    s += svgText(x(v), plotB + 16, tickText(v), "middle", 11.5, "var(--muted)");
+  }
+  s += svgLine(CH.ml, plotB, plotR, plotB, "var(--ink)", 1.2);
+  s += svgLine(CH.ml, CH.mt, CH.ml, plotB, "var(--ink)", 1.2);
+  s += svgText(CH.ml + (plotR - CH.ml)/2, CH.H - 6, xTitle, "middle", 12.5, "var(--muted)");
+  s += '<text transform="translate(14 ' + (CH.mt + (plotB - CH.mt)/2) + ') rotate(-90)" ' +
+       'text-anchor="middle" font-size="12.5" fill="var(--muted)">' + yTitle + "</text>";
+  return s;
+}
+
+/** Holding, ordering and total cost against Q, with the EOQ and the current Q marked. */
+function drawCostChart(host, p, Q0, Q, range){
+  var plotW = CH.W - CH.ml - CH.mr, plotH = CH.H - CH.mt - CH.mb;
+  var xMax = range.max;
+  var TCmin = minTotalCost(p.D, p.S, p.h);
+  var yStep = niceStep(2*TCmin, 5);
+  var yMax = Math.ceil(2*TCmin/yStep)*yStep;
+  var xStep = niceStep(xMax, 6);
+
+  function x(q){ return CH.ml + plotW*q/xMax; }
+  function y(c){ return CH.mt + plotH*(1 - c/yMax); }
+
+  var s = '<svg viewBox="0 0 ' + CH.W + " " + CH.H + '" role="img" aria-label="annual cost against order quantity">';
+  s += '<defs><clipPath id="costClip"><rect x="' + CH.ml + '" y="' + CH.mt + '" width="' + plotW +
+       '" height="' + plotH + '"/></clipPath></defs>';
+  s += drawAxes(xMax, yMax, xStep, yStep, x, y, "Order quantity Q (units)", "Annual cost ($ per year)");
+
+  // the three curves, sampled finely; ordering cost shoots up near Q = 0 so it is clipped
+  var dH = "", dO = "", dT = "", k, q, c;
+  var N = 240;
+  for(k = 1; k <= N; k++){
+    q = xMax*k/N;
+    c = costsAt(q, p);
+    var cmd = (k === 1 ? "M" : " L");
+    dH += cmd + x(q).toFixed(1) + " " + y(c.holding).toFixed(1);
+    dO += cmd + x(q).toFixed(1) + " " + y(Math.min(c.ordering, yMax*3)).toFixed(1);
+    dT += cmd + x(q).toFixed(1) + " " + y(Math.min(c.total, yMax*3)).toFixed(1);
+  }
+  s += '<g clip-path="url(#costClip)">';
+  s += '<path d="M' + x(0) + " " + y(0) + dH.replace("M", " L") + '" fill="none" stroke="var(--hold)" stroke-width="2.5"/>';
+  s += '<path d="' + dO + '" fill="none" stroke="var(--order)" stroke-width="2.5"/>';
+  s += '<path d="' + dT + '" fill="none" stroke="var(--total)" stroke-width="3.2"/>';
+  s += "</g>";
+
+  // EOQ: dashed line and label at the bottom of the plot
+  var plotB = CH.mt + plotH;
+  s += svgLine(x(Q0), CH.mt, x(Q0), plotB, "var(--muted)", 1.5, "5 4");
+  s += '<circle cx="' + x(Q0).toFixed(1) + '" cy="' + y(TCmin).toFixed(1) + '" r="4.5" fill="#fff" stroke="var(--total)" stroke-width="2"/>';
+  s += svgText(x(Q0) + 5, plotB - 8, "Q₀ = " + fmt(Q0), "start", 12, "var(--muted)", 700);
+
+  // current Q: solid line, a dot on each curve and the label at the top
+  var cq = costsAt(Q, p);
+  s += svgLine(x(Q), CH.mt, x(Q), plotB, "var(--qline)", 2);
+  s += markDot(x(Q), y(cq.holding), "var(--hold)", "Holding " + money(cq.holding));
+  if(cq.ordering <= yMax) s += markDot(x(Q), y(cq.ordering), "var(--order)", "Ordering " + money(cq.ordering));
+  if(cq.total <= yMax)    s += markDot(x(Q), y(cq.total), "var(--total)", "Total " + money(cq.total));
+  var anchor = x(Q) > CH.ml + plotW*0.8 ? "end" : "start";
+  var dx = anchor === "end" ? -6 : 6;
+  s += svgText(x(Q) + dx, CH.mt + 13, "Q = " + fmt(Q), anchor, 13, "var(--qline)", 700);
+
+  s += "</svg>";
+  host.innerHTML = s;
+}
+
+function markDot(cx, cy, colour, title){
+  return '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="6" fill="' + colour +
+         '" stroke="#fff" stroke-width="2"><title>' + title + "</title></circle>";
+}
+
+/** Path of the sawtooth: stock starts at Q, drains to 0 over one cycle, refills to Q. */
+function sawPath(Q, cycleDays, windowDays, x, y){
+  var d = "M" + x(0).toFixed(1) + " " + y(Q).toFixed(1);
+  var t0 = 0;
+  while(t0 < windowDays - 1e-9){
+    var t1 = Math.min(t0 + cycleDays, windowDays);
+    var level = Q*(1 - (t1 - t0)/cycleDays);
+    d += " L" + x(t1).toFixed(1) + " " + y(level).toFixed(1);
+    if(t1 < windowDays - 1e-9) d += " L" + x(t1).toFixed(1) + " " + y(Q).toFixed(1);
+    t0 = t1;
+  }
+  return d;
+}
+
+/** Inventory on hand over time for the current Q, with the EOQ sawtooth behind it. */
+function drawSawtooth(host, p, Q0, Q, range){
+  var plotW = CH.W - CH.ml - CH.mr, plotH = CH.H - CH.mt - CH.mb;
+  var cycle0 = costsAt(Q0, p).cycle;
+  var cycleQ = costsAt(Q, p).cycle;
+  var xMax = SAW_CYCLES*cycle0;
+  var yStep = niceStep(range.max, 5);
+  var yMax = Math.ceil(range.max/yStep)*yStep;
+  var xStep = niceStep(xMax, 6);
+
+  function x(t){ return CH.ml + plotW*t/xMax; }
+  function y(v){ return CH.mt + plotH*(1 - v/yMax); }
+
+  var s = '<svg viewBox="0 0 ' + CH.W + " " + CH.H + '" role="img" aria-label="inventory level over time">';
+  s += drawAxes(xMax, yMax, xStep, yStep, x, y, "Time (working days)", "Inventory on hand (units)");
+
+  // EOQ sawtooth as a light reference
+  s += '<path d="' + sawPath(Q0, cycle0, xMax, x, y) + '" fill="none" stroke="#cbd5e1" stroke-width="2"/>';
+
+  // current Q: filled sawtooth, average line
+  var d = sawPath(Q, cycleQ, xMax, x, y);
+  var plotB = CH.mt + plotH;
+  s += '<path d="' + d + " L" + x(xMax).toFixed(1) + " " + plotB + " L" + x(0) + " " + plotB +
+       ' Z" fill="var(--qline)" opacity=".08"/>';
+  s += '<path d="' + d + '" fill="none" stroke="var(--qline)" stroke-width="2.5" stroke-linejoin="round"/>';
+  s += svgLine(x(0), y(Q/2), x(xMax), y(Q/2), "var(--qline)", 1.8, "7 5");
+  s += svgText(x(xMax) - 4, y(Q/2) - 6, "Q/2 = " + fmt(Q/2), "end", 12, "var(--qline)", 700);
+  s += svgText(x(0) + 6, y(Q) - 6, "Q = " + fmt(Q), "start", 12, "var(--qline)", 700);
+
+  // mark one cycle length under the first tooth when it fits in the window
+  if(cycleQ <= xMax){
+    var yb = plotB - 12;
+    s += svgLine(x(0), yb, x(cycleQ), yb, "var(--ink)", 1.3);
+    s += svgLine(x(0), yb - 4, x(0), yb + 4, "var(--ink)", 1.3);
+    s += svgLine(x(cycleQ), yb - 4, x(cycleQ), yb + 4, "var(--ink)", 1.3);
+    s += svgText(x(cycleQ) + 5, yb + 4, "cycle " + fmt(cycleQ) + " days", "start", 11.5, "var(--ink)");
+  }
+
+  s += "</svg>";
+  host.innerHTML = s;
+}
+
+/* ============================================================
+   6. Calculation panel and summary
+   ============================================================ */
+
+function calcRow(name, formula, atQ, atQ0, cls){
+  return "<tr" + (cls ? ' class="' + cls + '"' : "") + "><td>" + name + '</td><td class="f">' + formula +
+         '</td><td>' + atQ.work + '</td><td class="ans">' + atQ.ans + '</td><td class="ans">' + atQ0 + "</td></tr>";
+}
+
+function renderCalc(p, Q0, Q){
+  var c = costsAt(Q, p), c0 = costsAt(Q0, p);
+
+  document.getElementById("eoqLine").innerHTML =
+    '<span class="eq">Q₀ = √(2DS / h) = √(2 × ' + fmt(p.D) + " × " + fmt(p.S) + " / " + fmt(p.h) +
+    ") = <b>" + fmt(Q0) + " units</b></span>";
+
+  var rows = "";
+  rows += calcRow("Average inventory", "Q / 2",
+    {work:fmt(Q) + " / 2", ans:fmt(c.avgInv) + " units"}, fmt(c0.avgInv) + " units");
+  rows += calcRow("Orders per year", "D / Q",
+    {work:fmt(p.D) + " / " + fmt(Q), ans:fmt(c.orders) + " orders"}, fmt(c0.orders) + " orders");
+  rows += calcRow("Length of order cycle", "days / (D/Q)",
+    {work:fmt(p.days) + " / " + fmt(c.orders), ans:fmt(c.cycle) + " days"}, fmt(c0.cycle) + " days");
+  rows += calcRow("Annual holding cost", "(Q/2) h",
+    {work:"(" + fmt(Q) + "/2) × " + fmt(p.h), ans:money(c.holding)}, money(c0.holding));
+  rows += calcRow("Annual ordering cost", "(D/Q) S",
+    {work:"(" + fmt(p.D) + "/" + fmt(Q) + ") × " + fmt(p.S), ans:money(c.ordering)}, money(c0.ordering));
+  rows += calcRow("<b>Total annual cost</b>", "(Q/2) h + (D/Q) S",
+    {work:money(c.holding) + " + " + money(c.ordering), ans:money(c.total)}, money(c0.total), "tot");
+  document.getElementById("calcBody").innerHTML = rows;
+}
+
+function renderSummary(p, Q0, Q){
+  var c = costsAt(Q, p);
+  var TCmin = minTotalCost(p.D, p.S, p.h);
+  var gap = c.total - TCmin;
+  var gapPct = gap/TCmin*100;
+
+  document.getElementById("stQ0").textContent = fmt(Q0);
+  document.getElementById("stHold").textContent = money(c.holding);
+  document.getElementById("stOrder").textContent = money(c.ordering);
+  document.getElementById("stTotal").textContent = money(c.total);
+  document.getElementById("stGap").textContent = "+" + money(gap) + " (" + fmt(gapPct, 1) + "%)";
+  document.getElementById("stGapBox").className = "stat " + (gapPct < 0.5 ? "good" : "bad");
+
+  var v = document.getElementById("verdict");
+  var rel = Math.abs(Q - Q0)/Q0;
+  if(rel < 0.005 || Math.abs(Q - Q0) < 0.5){
+    v.className = "verdict at";
+    v.textContent = "Q is at the EOQ: holding cost equals ordering cost, and total cost is at its minimum.";
+  }else if(Q < Q0){
+    v.className = "verdict off";
+    v.textContent = "Q is below the EOQ: ordering cost (" + money(c.ordering) + ") is more than holding cost (" +
+      money(c.holding) + "). Orders are placed too often. Raise Q.";
+  }else{
+    v.className = "verdict off";
+    v.textContent = "Q is above the EOQ: holding cost (" + money(c.holding) + ") is more than ordering cost (" +
+      money(c.ordering) + "). Too much stock is carried. Lower Q.";
+  }
+}
+
+/* ============================================================
+   7. Wiring
+   ============================================================ */
+
+var state = {p:null, Q0:null, range:null};
+
+/** Parameters changed: recompute EOQ and slider range, keep Q where possible. */
+function onParamsChanged(){
+  var p = readParams();
+
+  var conv = document.getElementById("convert");
+  conv.classList.toggle("hidden", p.notes.length === 0);
+  conv.innerHTML = "Converted to per year (D and h must use the same time unit): " + p.notes.join(" · ");
+
+  var warn = document.getElementById("warn");
+  warn.classList.toggle("hidden", p.ok);
+  warn.textContent = p.error;
+  if(!p.ok) return;
+
+  var Q0 = eoq(p.D, p.S, p.h);
+  var range = sliderRange(Q0);
+  state = {p:p, Q0:Q0, range:range};
+
+  var sl = document.getElementById("qSlider");
+  sl.min = range.min; sl.max = range.max;
+  document.getElementById("qNum").min = range.min;
+  document.getElementById("qNum").max = range.max;
+  document.getElementById("qMinLbl").textContent = fmt(range.min);
+  document.getElementById("qMaxLbl").textContent = fmt(range.max);
+
+  if(currentQ === null) currentQ = Math.round(Q0);
+  setQ(currentQ);
+}
+
+/** Move Q (clamped to the slider range) and redraw everything. */
+function setQ(q){
+  if(!state.p || !(q > 0)) return;
+  q = Math.min(state.range.max, Math.max(state.range.min, Math.round(q)));
+  currentQ = q;
+  document.getElementById("qSlider").value = q;
+  document.getElementById("qNum").value = q;
+  redraw();
+}
+
+function redraw(){
+  var p = state.p, Q0 = state.Q0, Q = currentQ;
+  renderSummary(p, Q0, Q);
+  drawCostChart(document.getElementById("costChart"), p, Q0, Q, state.range);
+  drawSawtooth(document.getElementById("sawChart"), p, Q0, Q, state.range);
+  renderCalc(p, Q0, Q);
+}
+
+function showHoldingFields(){
+  var pct = document.getElementById("inHMode").value === "pct";
+  document.getElementById("hAbsBox").classList.toggle("hidden", pct);
+  document.getElementById("hPctBox1").classList.toggle("hidden", !pct);
+  document.getElementById("hPctBox2").classList.toggle("hidden", !pct);
+}
+
+function loadExample(){
+  document.getElementById("inD").value = EXAMPLE.D;
+  document.getElementById("inDPer").value = EXAMPLE.dPer;
+  document.getElementById("inS").value = EXAMPLE.S;
+  document.getElementById("inHMode").value = EXAMPLE.hMode;
+  document.getElementById("inH").value = EXAMPLE.h;
+  document.getElementById("inP").value = EXAMPLE.P;
+  document.getElementById("inI").value = EXAMPLE.i;
+  document.getElementById("inDays").value = EXAMPLE.days;
+  showHoldingFields();
+  currentQ = null;
+  onParamsChanged();
+}
+
+function init(){
+  var ids = ["inD", "inDPer", "inS", "inHMode", "inH", "inP", "inI", "inDays"];
+  ids.forEach(function(id){
+    document.getElementById(id).addEventListener("input", function(){
+      showHoldingFields();
+      onParamsChanged();
+    });
+  });
+  document.getElementById("qSlider").addEventListener("input", function(e){ setQ(Number(e.target.value)); });
+  document.getElementById("qNum").addEventListener("change", function(e){ setQ(Number(e.target.value)); });
+  document.getElementById("btnSnap").addEventListener("click", function(){ setQ(state.Q0); });
+  document.getElementById("btnExample").addEventListener("click", loadExample);
+
+  loadExample();
+  if(location.search.indexOf("test") >= 0 || location.hash.indexOf("test") >= 0) runTests();
+}
+
+/* ============================================================
+   8. Acceptance checks — open with ?test and read the console
+   ============================================================ */
+
+function runTests(){
+  var results = [];
+  function check(name, got, want, tol){
+    var ok = Math.abs(got - want) <= (tol === undefined ? 0.005 : tol);
+    results.push({test:name, got:Number(got.toFixed(4)), expected:want, pass:ok});
+  }
+  function params(D, S, h, days){ return {D:D, S:S, h:h, days:days}; }
+
+  // Slides 13-14: D = 9600, S = 75, h = 16, 288 days -> 300 units, 32 orders, 9 days, 2400 + 2400
+  var p = params(9600, 75, 16, 288);
+  var c = costsAt(eoq(p.D, p.S, p.h), p);
+  check("slide 14 EOQ", c.Q, 300);
+  check("slide 14 orders per year", c.orders, 32);
+  check("slide 14 cycle length", c.cycle, 9);
+  check("slide 14 holding", c.holding, 2400);
+  check("slide 14 ordering", c.ordering, 2400);
+  check("slide 14 total", c.total, 4800);
+  check("slide 39 TC* = sqrt(2DSh)", minTotalCost(p.D, p.S, p.h), 4800);
+
+  // Slide 15: D = 3600, S = 50, h = 20% of $180 = 36 -> EOQ 100, total 3600
+  p = params(3600, 50, 0.20*180, 365);
+  c = costsAt(eoq(p.D, p.S, p.h), p);
+  check("slide 15 EOQ", c.Q, 100);
+  check("slide 15 total", c.total, 3600);
+
+  // Slides 16/18: 400 sacks a month, S = 50, h = 12 per year -> EOQ 200, 24 orders, 2400
+  p = params(400*12, 50, 12, 365);
+  c = costsAt(eoq(p.D, p.S, p.h), p);
+  check("slide 18 EOQ", c.Q, 200);
+  check("slide 18 orders", c.orders, 24);
+  check("slide 18 total", c.total, 2400);
+
+  // Slide 17: 10,800 a year, S = 50, h = $1 per month -> EOQ 300
+  p = params(10800, 50, 1*12, 365);
+  check("slide 17 EOQ", eoq(p.D, p.S, p.h), 300);
+
+  // Page wiring: the example loads at the EOQ, and the month conversions are applied
+  check("page loads at EOQ", currentQ, 300, 0);
+  document.getElementById("inD").value = 400;
+  document.getElementById("inDPer").value = "month";
+  document.getElementById("inS").value = 50;
+  document.getElementById("inH").value = 12;
+  onParamsChanged();
+  check("page bakery EOQ (monthly D)", state.Q0, 200);
+  loadExample();
+
+  console.table(results);
+  var failed = results.filter(function(x){ return !x.pass; });
+  console.log(failed.length ? failed.length + " CHECK(S) FAILED" : "all " + results.length + " checks passed");
+  window.__testResults = results;
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
