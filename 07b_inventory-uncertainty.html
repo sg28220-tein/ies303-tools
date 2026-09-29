@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inventory under Uncertainty — IES 303</title>
+<!--
+  Inventory under uncertainty — IES 303 Engineering Management (SIIT), Lecture 07b.
+  Standalone page: open directly in any browser, no server needed. Built to 07b_inventory_spec.txt.
+
+  Four sections:
+    1. Reorder point, continuous review (s, Q)   SS and ROP, with a daily simulation
+    2. Where the safety stock comes from          variance of lead-time demand, split in two
+    3. Fixed order interval, periodic review      Q = d(OI + LT) + z sigma_d sqrt(OI + LT) - A
+    4. Single period model                        Cs, Ce, service level, S0
+
+  z rule (spec section 3): z is computed from the service level, then rounded to 2 decimals
+  as read from a z table; 95% is shown as 1.645. The rounded z is used in all working.
+
+  Simulation: demand for each day is Normal(d, sigma_d) rounded to a whole unit and used up
+  evenly over the day. The reorder point is checked continuously, so an order goes in at the
+  moment the inventory position reaches ROP (no overshoot below ROP). Lead times are whole
+  days. Unmet demand is lost. A cycle runs from one delivery to the next; it "has a stockout"
+  if stock ran out with demand unmet at any time in it.
+
+  Add ?test (or #test) to the URL to run the acceptance checks in the console.
+-->
+<style>
+  :root{
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --ok:#16a34a; --ok-soft:#f0fdf4;
+    --warn:#d97706; --warn-soft:#fffbeb;
+    --bad:#dc2626; --bad-soft:#fef2f2;
+    --order:#ea580c; --grid:#eef1f4; --ss:#bbf7d0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);background:#fafafa;font-size:16px;line-height:1.5}
+  .wrap{max-width:1240px;margin:0 auto;padding:24px 20px 60px}
+  header h1{margin:0;font-size:29px;font-weight:700}
+  header .sub{margin:4px 0 20px;color:var(--muted)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 4px;font-size:20px}
+  .card .q{margin:0 0 14px;color:var(--muted)}
+  .hidden{display:none !important}
+  .hint{color:var(--muted);font-size:14px}
+  button{font:inherit;font-weight:600;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  select,input[type=number]{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  input[type=number]{width:84px;text-align:center}
+
+  /* section layout: inputs left, chart and working right */
+  .sec{display:grid;grid-template-columns:330px minmax(0,1fr);gap:22px;align-items:start}
+  .inputs{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .inputs h3{margin:0 0 6px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+
+  /* slider + number box */
+  .sl{margin:8px 0 10px}
+  .sl label{display:block;font-weight:600;font-size:15px}
+  .sl .ctl{display:flex;gap:10px;align-items:center}
+  .sl input[type=range]{flex:1;min-width:0;accent-color:var(--accent);height:28px}
+  .sl input[type=number]{width:86px}
+  .fld{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;font-weight:600;font-size:15px}
+  .seedRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+  .seedRow input{width:96px}
+
+  /* charts */
+  .chartBox{border:1px solid var(--line);border-radius:12px;background:#fff;padding:6px 4px 0;overflow-x:auto}
+  .chartBox svg{display:block;width:100%;height:auto}
+  .legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:14px;margin:0 0 6px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{display:inline-block;width:20px;height:0;border-top:3px solid}
+  .sw.dash{border-top-style:dashed}
+  .sw.box{height:12px;border:0}
+  .sw.dot{width:11px;height:11px;border-radius:50%;border:0}
+  .twoCharts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+  .twoCharts b{font-size:15px}
+
+  /* results strip */
+  .stats{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 6px}
+  .stat{border:1px solid var(--line);border-radius:11px;padding:7px 14px;background:#fff;flex:1 1 130px}
+  .stat .k{font-size:13px;color:var(--muted);font-weight:600}
+  .stat .v{font-size:21px;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat.good .v{color:var(--ok)} .stat.bad .v{color:var(--bad)}
+  .runLine{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:6px 0}
+  .runOut{font-weight:600}
+
+  /* calculation panel */
+  .calc{background:var(--accent-soft);border-radius:10px;padding:12px 16px;margin:12px 0 4px}
+  .calc h4{margin:0 0 6px;font-size:16px;color:var(--accent)}
+  .calc .ln{font-family:Georgia,"Times New Roman",serif;font-size:17px;margin:4px 0;line-height:1.55}
+  .calc .ln b{font-family:"Segoe UI",system-ui,sans-serif}
+  .calc .case{display:inline-block;background:#fff;border:1px solid #bfdbfe;border-radius:999px;padding:2px 12px;font-weight:700;font-size:14.5px;color:var(--accent);margin-bottom:6px}
+  .calc .note{font-family:"Segoe UI",system-ui,sans-serif;font-size:14px;color:var(--muted)}
+  .warnBox{background:var(--bad-soft);color:var(--bad);border:1px solid #fecaca;border-radius:10px;padding:9px 14px;font-weight:600;margin:10px 0}
+  .point{background:var(--warn-soft);border-radius:10px;padding:11px 16px;margin:12px 0;font-size:15.5px}
+
+  details.prompts{margin-top:14px;border:1px solid var(--line);border-radius:10px;padding:8px 14px;background:#fff}
+  details.prompts summary{cursor:pointer;font-weight:700}
+  details.prompts li{margin:4px 0}
+
+  /* stacked bar text */
+  .gen{font-size:16.5px;margin:10px 0}
+  .gen b{color:var(--accent)}
+
+  /* discrete table */
+  table.disc{border-collapse:collapse;font-size:15px;margin:6px 0;width:100%}
+  table.disc th{background:#fff;color:var(--muted);font-size:13px;padding:5px 6px;border:1px solid var(--line)}
+  table.disc td{padding:3px 5px;border:1px solid var(--line);text-align:center;font-variant-numeric:tabular-nums}
+  table.disc input{width:70px;padding:3px 4px}
+  table.disc tr.pick td{background:var(--ok-soft);font-weight:700;color:var(--ok)}
+
+  /* mouse only: hover effects (on touch screens they stick after a tap) */
+  @media (hover:hover){
+    button:hover{background:#f3f4f6}
+    button.primary:hover{background:#1d4ed8}
+  }
+
+  /* touch screens (iPad / iPhone); desktop with a mouse is unaffected */
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+  @media (pointer:coarse){
+    /* iOS zooms in on any text box under 16px and does not zoom back out */
+    input:not([type=checkbox]):not([type=radio]):not([type=range]), select{font-size:16px}
+    button, select{min-height:44px}
+    .sl input[type=range]{height:40px}
+    input[type=checkbox]{width:22px;height:22px}
+  }
+
+  /* one column below tablet width */
+  @media screen and (max-width:900px){
+    .sec{grid-template-columns:minmax(0,1fr)}
+    .twoCharts{grid-template-columns:minmax(0,1fr)}
+  }
+
+  /* phones */
+  @media screen and (max-width:640px){
+    .wrap{padding:16px 12px 48px}
+    .card{padding:14px 12px;border-radius:12px}
+    header h1{font-size:24px}
+    /* keep chart labels readable: scroll sideways rather than shrink */
+    .chartBox svg.wide{min-width:640px}
+    .calc .ln{font-size:16px}
+  }
+
+  @media print{
+    body{background:#fff} .noprint{display:none !important}
+    .card{break-inside:avoid;box-shadow:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Inventory under Uncertainty</h1>
+  <p class="sub">IES 303 · Lecture 07b — reorder point, safety stock, fixed order interval and the single period model. Change one input at a time and watch the stock respond.</p>
+</header>
+
+<!-- ============ Section 1 ============ -->
+<section class="card" id="sec1">
+  <h2>1. Reorder point — continuous review (s, Q)</h2>
+  <p class="q">When should we order, and how much safety stock do we need?</p>
+  <div class="sec">
+    <div class="inputs">
+      <h3>Inputs</h3>
+      <div id="s1Inputs"></div>
+      <div class="seedRow noprint">
+        <label class="fld" style="margin:0">Seed <input type="number" id="s1Seed" value="1" step="1"></label>
+        <button id="s1New">New random run</button>
+      </div>
+    </div>
+    <div>
+      <div class="legend">
+        <span><span class="sw" style="border-color:var(--accent)"></span>On hand</span>
+        <span><span class="sw dash" style="border-color:var(--ink)"></span>ROP</span>
+        <span><span class="sw box" style="background:var(--ss)"></span>Safety stock</span>
+        <span><span class="sw dot" style="background:var(--order)"></span>Order placed</span>
+        <span><span class="sw dot" style="background:var(--accent)"></span>Order arrives</span>
+        <span><span class="sw" style="border-color:var(--bad);border-top-width:5px"></span>Stockout</span>
+      </div>
+      <div class="chartBox" id="s1Chart"></div>
+      <div class="stats" id="s1Stats"></div>
+      <div class="runLine noprint">
+        <button class="primary" id="s1Run1000">Run 1,000 cycles</button>
+        <span class="runOut" id="s1RunOut"></span>
+      </div>
+      <p class="hint">Demand and lead times are rounded to whole units, so the achieved service level will not match the target exactly.</p>
+      <div class="calc" id="s1Calc"></div>
+      <details class="prompts">
+        <summary>Classroom prompts</summary>
+        <ul>
+          <li>Set σ<sub>LT</sub> to 0, then to 1 day. How much does SS change?</li>
+          <li>Lower the service level to 80%. What happens to stockouts and to average stock?</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Section 2 ============ -->
+<section class="card" id="sec2">
+  <h2>2. Where does the safety stock come from?</h2>
+  <p class="q">Uses the Section 1 inputs. The variance of lead-time demand has a demand part and a lead-time part.</p>
+  <div class="sec">
+    <div class="inputs">
+      <h3>From Section 1</h3>
+      <div id="s2Echo" class="hint" style="font-size:15px"></div>
+      <div class="point"><b>Variances add, not standard deviations.</b> The lead-time part is multiplied by
+        <i>d</i>², which is why it usually dominates. Remember KFC (slides 3 and 7): a late truck costs
+        far more safety stock than a busy day.</div>
+    </div>
+    <div>
+      <div class="chartBox" id="s2Chart"></div>
+      <div class="gen" id="s2Text"></div>
+      <div class="calc" id="s2Calc"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Section 3 ============ -->
+<section class="card" id="sec3">
+  <h2>3. Fixed order interval — periodic review (R, S)</h2>
+  <p class="q">If we can only order on fixed days, how much should we order each time?</p>
+  <div class="sec">
+    <div class="inputs">
+      <h3>Inputs</h3>
+      <div id="s3Inputs"></div>
+      <label class="fld" style="justify-content:flex-start"><input type="checkbox" id="s3Compare"> Compare with reorder point policy</label>
+      <div class="seedRow noprint">
+        <label class="fld" style="margin:0">Seed <input type="number" id="s3Seed" value="1" step="1"></label>
+        <button id="s3New">New random run</button>
+      </div>
+    </div>
+    <div>
+      <div class="legend">
+        <span><span class="sw" style="border-color:var(--accent)"></span>On hand (FOI)</span>
+        <span><span class="sw box" style="background:var(--ss)"></span>Safety stock</span>
+        <span><span class="sw dot" style="background:var(--order)"></span>Review day</span>
+        <span><span class="sw" style="border-color:var(--bad);border-top-width:5px"></span>Stockout</span>
+        <span id="s3LegendRop" class="hidden"><span class="sw dash" style="border-color:#94a3b8"></span>On hand (ROP policy)</span>
+      </div>
+      <div class="chartBox" id="s3Chart"></div>
+      <div class="stats" id="s3Stats"></div>
+      <div id="s3CompareBox" class="hidden"></div>
+      <div class="calc" id="s3Calc"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Section 4 ============ -->
+<section class="card" id="sec4">
+  <h2>4. Single period model (perishables)</h2>
+  <p class="q">How many should we stock when leftovers lose value?</p>
+  <div class="sec">
+    <div class="inputs">
+      <h3>Inputs</h3>
+      <label class="fld">Selling price per unit <input type="number" id="s4Price" value="32" step="any"></label>
+      <label class="fld">Cost per unit <input type="number" id="s4Cost" value="8" step="any"></label>
+      <label class="fld">Salvage value per unit <input type="number" id="s4Salv" value="0" step="any"></label>
+      <div class="hint" style="margin-top:-6px">Negative salvage = disposal cost.</div>
+      <label class="fld">Shortage penalty (goodwill) <input type="number" id="s4Pen" value="0" step="any"></label>
+      <label class="fld">Demand distribution
+        <select id="s4Dist">
+          <option value="uniform">Uniform</option>
+          <option value="normal">Normal</option>
+          <option value="discrete">Discrete table</option>
+        </select>
+      </label>
+      <div id="s4Uni">
+        <label class="fld">Minimum <input type="number" id="s4Min" value="30" step="any"></label>
+        <label class="fld">Maximum <input type="number" id="s4Max" value="50" step="any"></label>
+      </div>
+      <div id="s4Norm" class="hidden">
+        <label class="fld">Mean <input type="number" id="s4Mean" value="20" step="any"></label>
+        <label class="fld">SD <input type="number" id="s4SD" value="3" step="any"></label>
+      </div>
+      <div id="s4Disc" class="hidden">
+        <table class="disc">
+          <thead><tr><th>Demand</th><th>Rel. freq.</th><th>Cum. freq.</th></tr></thead>
+          <tbody id="s4Table"></tbody>
+        </table>
+        <div class="noprint" style="display:flex;gap:8px">
+          <button id="s4AddRow">Add row</button><button id="s4DelRow">Remove last row</button>
+        </div>
+        <div id="s4SumWarn" class="warnBox hidden"></div>
+      </div>
+    </div>
+    <div>
+      <div id="s4Warn" class="warnBox hidden"></div>
+      <div class="twoCharts">
+        <div><b>Demand distribution</b><div class="chartBox" id="s4DemChart"></div></div>
+        <div><b>Expected profit vs stock level</b><div class="chartBox" id="s4ProfChart"></div></div>
+      </div>
+      <div class="calc" id="s4Calc"></div>
+      <details class="prompts">
+        <summary>Classroom prompts</summary>
+        <ul>
+          <li>Raise the salvage value. Which way does S<sub>0</sub> move, and why?</li>
+          <li>Make the item "expensive medicine" (high C<sub>s</sub>) versus "cheap yogurt" (low C<sub>s</sub>). Compare the service levels.</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+</section>
+</div>
+
+<script>
+/* ============================================================
+   1. Input definitions (spec defaults and ranges)
+   ============================================================ */
+
+var S1_INPUTS = [
+  {id:"s1d",    label:"Average daily demand, <i>d</i>",       min:1,  max:200,  step:1,   value:20},
+  {id:"s1sd",   label:"SD of daily demand, σ<sub>d</sub>",     min:0,  max:50,   step:0.5, value:4},
+  {id:"s1LT",   label:"Average lead time, LT (days)",          min:1,  max:30,   step:1,   value:4},
+  {id:"s1sdLT", label:"SD of lead time, σ<sub>LT</sub> (days)", min:0, max:10,   step:0.1, value:0},
+  {id:"s1SL",   label:"Service level (%)",                     min:50, max:99.9, step:0.1, value:95},
+  {id:"s1Q",    label:"Order quantity, Q",                     min:1,  max:5000, step:1,   value:200},
+  {id:"s1Days", label:"Days to simulate",                      min:30, max:730,  step:1,   value:180}
+];
+
+var S3_INPUTS = [
+  {id:"s3d",    label:"Average daily demand, <i>d</i>",        min:1,  max:200,  step:1,   value:30},
+  {id:"s3sd",   label:"SD of daily demand, σ<sub>d</sub>",      min:0,  max:50,   step:0.5, value:3},
+  {id:"s3OI",   label:"Order interval, OI (days)",              min:1,  max:60,   step:1,   value:7},
+  {id:"s3LT",   label:"Lead time, LT (days)",                   min:1,  max:30,   step:1,   value:2},
+  {id:"s3SL",   label:"Service level (%)",                      min:50, max:99.9, step:0.1, value:99},
+  {id:"s3A",    label:"Amount on hand at order time, A",        min:0,  max:5000, step:1,   value:71},
+  {id:"s3Days", label:"Days to simulate",                       min:30, max:730,  step:1,   value:180}
+];
+
+var DISCRETE_DEFAULT = [[0, 0.20], [1, 0.40], [2, 0.30], [3, 0.10]];
+
+/* ============================================================
+   2. Statistics helpers
+   ============================================================ */
+
+/** Inverse standard normal CDF (Acklam's rational approximation). */
+function normInv(p){
+  var a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+  var b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+  var c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+  var d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  var q, r, pl = 0.02425;
+  if(p < pl){
+    q = Math.sqrt(-2*Math.log(p));
+    return (((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5]) / ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1);
+  }
+  if(p > 1 - pl){
+    q = Math.sqrt(-2*Math.log(1 - p));
+    return -(((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5]) / ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1);
+  }
+  q = p - 0.5; r = q*q;
+  return (((((a[0]*r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5])*q /
+         (((((b[0]*r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1);
+}
+
+/** z as a student reads it from the z table: 2 decimals, and 1.645 for 95%. */
+function zFromServiceLevel(sl){
+  if(Math.abs(sl - 0.95) < 1e-9) return 1.645;
+  return Math.round(normInv(sl)*100)/100;
+}
+
+/** Standard normal CDF (Abramowitz and Stegun 7.1.26). */
+function normCdf(x){
+  var t = 1/(1 + 0.3275911*Math.abs(x)/Math.SQRT2);
+  var y = 1 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*Math.exp(-x*x/2);
+  return x >= 0 ? (1 + y)/2 : (1 - y)/2;
+}
+
+function normPdf(x){
+  return Math.exp(-x*x/2)/Math.sqrt(2*Math.PI);
+}
+
+/** Seeded random numbers (mulberry32), so a seed always gives the same run. */
+function makeRng(seed){
+  var a = seed >>> 0;
+  return function(){
+    a = (a + 0x6D2B79F5) >>> 0;
+    var t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0)/4294967296;
+  };
+}
+
+/** One Normal(mean, sd) draw (Box-Muller). */
+function normalDraw(rng, mean, sd){
+  if(sd <= 0) return mean;
+  var u1 = rng() || 1e-12, u2 = rng();
+  return mean + sd*Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+}
+
+/* ============================================================
+   3. Model — the lecture formulas, one function each
+   ============================================================ */
+
+/** Section 1: which case applies, SS and ROP. Uses the rounded z. */
+function reorderPoint(d, sd, LT, sdLT, sl){
+  var z = zFromServiceLevel(sl);
+  var r = {z:z, d:d, sd:sd, LT:LT, sdLT:sdLT, sl:sl};
+  if(sd > 0 && sdLT === 0){
+    r.caseName = "Variable demand";
+    r.ss = z*sd*Math.sqrt(LT);
+  }else if(sd === 0 && sdLT > 0){
+    r.caseName = "Variable lead time";
+    r.ss = z*d*sdLT;
+  }else if(sd > 0 && sdLT > 0){
+    r.caseName = "Variable demand and lead time";
+    r.ss = z*Math.sqrt(LT*sd*sd + d*d*sdLT*sdLT);
+  }else{
+    r.caseName = "No uncertainty";
+    r.ss = 0;
+  }
+  r.expected = d*LT;
+  r.rop = r.expected + r.ss;
+  return r;
+}
+
+/** Section 3: fixed order interval. */
+function fixedInterval(d, sd, OI, LT, sl, A){
+  var z = zFromServiceLevel(sl);
+  var P = OI + LT;
+  var ss = z*sd*Math.sqrt(P);
+  var S = d*P + ss;
+  return {z:z, P:P, ss:ss, S:S, Q:S - A, expected:d*P, A:A};
+}
+
+/** Section 4: single period model. dist = {type, min, max, mean, sd, rows:[[demand, freq]]}. */
+function singlePeriod(price, cost, salvage, penalty, dist){
+  var Cs = price - cost + penalty;
+  var Ce = cost - salvage;
+  var r = {Cs:Cs, Ce:Ce, sl:NaN, S0:NaN, z:NaN, pickRow:-1, error:""};
+  if(!(Cs > 0)){ r.error = "Cs must be positive: the price (plus penalty) must be above the cost."; return r; }
+  if(!(Ce > 0)){ r.error = "Ce must be positive: salvage at or above cost means leftovers cost nothing, so stock as much as possible."; return r; }
+  r.sl = Cs/(Cs + Ce);
+  if(dist.type === "uniform"){
+    r.S0 = dist.min + r.sl*(dist.max - dist.min);
+  }else if(dist.type === "normal"){
+    r.z = zFromServiceLevel(r.sl);
+    r.S0 = dist.mean + r.z*dist.sd;
+  }else{
+    var cum = 0;
+    for(var i = 0; i < dist.rows.length; i++){
+      cum += dist.rows[i][1];
+      if(cum >= r.sl - 1e-9){ r.pickRow = i; r.S0 = dist.rows[i][0]; break; }
+    }
+    if(r.pickRow < 0) r.error = "No row reaches the service level: the cumulative frequency never gets to " + fmt(r.sl, 4) + ".";
+  }
+  return r;
+}
+
+/** Expected profit at stock level S: price E[min(D,S)] + salvage E[(S-D)+] - cost S - penalty E[(D-S)+]. */
+function expectedProfit(S, price, cost, salvage, penalty, dist){
+  var over, under;   // E[(S-D)+] and E[(D-S)+]
+  if(dist.type === "uniform"){
+    var a = dist.min, b = dist.max, w = b - a;
+    var sc = Math.min(Math.max(S, a), b);
+    over  = (sc - a)*(sc - a)/(2*w) + Math.max(0, S - b);
+    under = (b - sc)*(b - sc)/(2*w) + Math.max(0, a - S);
+  }else if(dist.type === "normal"){
+    var k = (S - dist.mean)/dist.sd;
+    under = dist.sd*(normPdf(k) - k*(1 - normCdf(k)));
+    over  = S - dist.mean + under;
+  }else{
+    over = 0; under = 0;
+    for(var i = 0; i < dist.rows.length; i++){
+      var dm = dist.rows[i][0], f = dist.rows[i][1];
+      over  += f*Math.max(0, S - dm);
+      under += f*Math.max(0, dm - S);
+    }
+  }
+  var sold = S - over;
+  return price*sold + salvage*over - cost*S - penalty*under;
+}
+
+/**
+ * Daily inventory simulation for both policies.
+ * cfg: policy "rop" or "foi"; d, sd, LT, sdLT; ROP and Q (rop); OI and S (foi);
+ *      start (opening stock), days, maxCycles (optional), seed, record (keep chart data).
+ * Demand comes from its own random stream, so two policies with the same seed see the same days.
+ */
+function simulateInventory(cfg){
+  var rngD = makeRng(cfg.seed), rngL = makeRng(cfg.seed*31 + 7);
+  var EPS = 1e-9;
+  var onHand = cfg.start, pipe = [];
+  var res = {points:[[0, onHand]], orders:[], arrivals:[], stockouts:[], reviews:[],
+             cycles:0, badCycles:0, unitsShort:0, avgOnHand:0};
+  var started = false, cycleBad = false, area = 0, t = 0, day = 0;
+  var dayLimit = cfg.maxCycles ? 1e6 : cfg.days;
+
+  function onOrder(){
+    var s = 0;
+    for(var i = 0; i < pipe.length; i++) s += pipe[i].qty;
+    return s;
+  }
+
+  function place(time){
+    var L = Math.max(1, Math.round(normalDraw(rngL, cfg.LT, cfg.sdLT || 0)));
+    var q = (cfg.policy === "rop") ? cfg.Q : cfg.S - (onHand + onOrder());
+    if(q <= EPS) return;
+    pipe.push({at:time + L, qty:q});
+    if(cfg.record) res.orders.push({t:time, level:onHand, qty:q, at:time + L});
+  }
+
+  function receive(time){
+    for(var i = pipe.length - 1; i >= 0; i--){
+      if(pipe[i].at > time + EPS) continue;
+      var before = onHand;
+      onHand += pipe[i].qty;
+      if(cfg.record){
+        res.arrivals.push({t:time, qty:pipe[i].qty, before:before, after:onHand});
+        res.points.push([time, onHand]);
+      }
+      pipe.splice(i, 1);
+      // a delivery closes the cycle that ran since the previous delivery
+      if(started){ res.cycles++; if(cycleBad) res.badCycles++; }
+      started = true; cycleBad = false;
+    }
+  }
+
+  function markStockout(t0, t1){
+    if(!cfg.record) return;
+    var last = res.stockouts[res.stockouts.length - 1];
+    if(last && Math.abs(last[1] - t0) < EPS) last[1] = t1;
+    else res.stockouts.push([t0, t1]);
+  }
+
+  while(day < dayLimit && !(cfg.maxCycles && res.cycles >= cfg.maxCycles)){
+    var D = Math.max(0, Math.round(normalDraw(rngD, cfg.d, cfg.sd)));
+    var end = day + 1;
+    t = day;
+    receive(t);
+    if(cfg.policy === "foi" && day % cfg.OI === 0){
+      if(cfg.record) res.reviews.push({t:t, level:onHand});
+      place(t);
+    }
+    while(t < end - EPS){
+      receive(t);
+      if(cfg.policy === "rop"){
+        var guard = 0;
+        while(onHand + onOrder() <= cfg.ROP + EPS && guard++ < 1000) place(t);
+      }
+      var nextArrival = Infinity;
+      for(var i = 0; i < pipe.length; i++) nextArrival = Math.min(nextArrival, pipe[i].at);
+      var tNext = Math.min(end, nextArrival);
+
+      if(onHand > EPS && D > 0){
+        // stock falls at D per day until it empties, the ROP is reached, or an order arrives
+        var tEmpty = t + onHand/D;
+        var ip = onHand + onOrder();
+        var tRop = (cfg.policy === "rop" && ip > cfg.ROP + EPS) ? t + (ip - cfg.ROP)/D : Infinity;
+        var tEv = Math.min(tNext, tEmpty, tRop);
+        var used = D*(tEv - t);
+        area += (onHand - used/2)*(tEv - t);
+        onHand = (tEv === tEmpty) ? 0 : onHand - used;
+        t = tEv;
+      }else{
+        // shelf empty (or no demand today): demand is lost until the next event
+        if(D > 0){
+          res.unitsShort += D*(tNext - t);
+          cycleBad = true;
+          markStockout(t, tNext);
+        }
+        area += onHand*(tNext - t);
+        t = tNext;
+      }
+      if(cfg.record) res.points.push([t, onHand]);
+    }
+    day++;
+  }
+  res.endTime = t;
+  res.avgOnHand = area/Math.max(t, 1);
+  res.achieved = res.cycles ? 1 - res.badCycles/res.cycles : NaN;
+  return res;
+}
+
+/* ============================================================
+   4. Formatting and SVG helpers
+   ============================================================ */
+
+function fmt(x, dp){
+  if(dp === undefined) dp = 2;
+  if(!isFinite(x)) return "–";
+  if(Math.abs(x) < 1e-9) x = 0;   // no "-0" on axis ticks
+  return x.toLocaleString("en-US", {maximumFractionDigits:dp});
+}
+
+function pct(x, dp){
+  return fmt(x*100, dp === undefined ? 1 : dp) + "%";
+}
+
+function niceStep(span, count){
+  if(!(span > 0)) return 1;
+  var raw = span/count;
+  var mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  var n = raw/mag;
+  return (n <= 1 ? 1 : (n <= 2 ? 2 : (n <= 5 ? 5 : 10)))*mag;
+}
+
+function svgLine(x1, y1, x2, y2, stroke, width, extra){
+  return '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' +
+         y2.toFixed(1) + '" stroke="' + stroke + '" stroke-width="' + width + '"' + (extra || "") + "/>";
+}
+
+function svgText(x, y, text, anchor, size, fill, weight){
+  return '<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" text-anchor="' + anchor + '" font-size="' +
+         size + '" fill="' + fill + '"' + (weight ? ' font-weight="' + weight + '"' : "") + ">" + text + "</text>";
+}
+
+/** Grid lines and tick labels. g = {W,H,ml,mr,mt,plotB,xMax,yMax,x(),y(),xTitle,yTitle,xMin}. */
+function drawGrid(g){
+  var s = "", v;
+  var xMin = g.xMin || 0;
+  var yStep = niceStep(g.yMax, 5), xStep = niceStep(g.xMax - xMin, 8);
+  if(g.intX) xStep = Math.max(1, Math.round(xStep));
+  for(v = 0; v <= g.yMax + 1e-9; v += yStep){
+    s += svgLine(g.ml, g.y(v), g.W - g.mr, g.y(v), "var(--grid)", 1);
+    s += svgText(g.ml - 7, g.y(v) + 5, fmt(v, 2), "end", 14, "var(--muted)");
+  }
+  for(v = Math.ceil(xMin/xStep)*xStep; v <= g.xMax + 1e-9; v += xStep){
+    s += svgLine(g.x(v), g.mt, g.x(v), g.plotB, "var(--grid)", 1);
+    s += svgText(g.x(v), g.plotB + 19, fmt(v, 2), "middle", 14, "var(--muted)");
+  }
+  s += svgLine(g.ml, g.plotB, g.W - g.mr, g.plotB, "var(--ink)", 1.2);
+  s += svgLine(g.ml, g.mt, g.ml, g.plotB, "var(--ink)", 1.2);
+  if(g.xTitle) s += svgText(g.ml + (g.W - g.mr - g.ml)/2, g.H - 6, g.xTitle, "middle", 14, "var(--muted)");
+  if(g.yTitle) s += '<text transform="translate(15 ' + ((g.mt + g.plotB)/2) + ') rotate(-90)" text-anchor="middle" ' +
+                    'font-size="14" fill="var(--muted)">' + g.yTitle + "</text>";
+  return s;
+}
+
+function pathFromPoints(points, x, y){
+  var d = "";
+  for(var i = 0; i < points.length; i++){
+    d += (i ? " L" : "M") + x(points[i][0]).toFixed(1) + " " + y(points[i][1]).toFixed(1);
+  }
+  return d;
+}
+
+/* ============================================================
+   5. Inputs: slider + number box, built from the tables above
+   ============================================================ */
+
+function buildInputs(hostId, defs, onChange){
+  var html = "";
+  defs.forEach(function(f){
+    html += '<div class="sl"><label for="' + f.id + '">' + f.label + "</label>" +
+            '<div class="ctl"><input type="range" id="' + f.id + 'R" min="' + f.min + '" max="' + f.max +
+            '" step="' + f.step + '" value="' + f.value + '" aria-label="' + f.label.replace(/<[^>]+>/g, "") + '">' +
+            '<input type="number" id="' + f.id + '" min="' + f.min + '" step="' + f.step + '" value="' + f.value + '"></div></div>';
+  });
+  document.getElementById(hostId).innerHTML = html;
+  defs.forEach(function(f){
+    var range = document.getElementById(f.id + "R"), box = document.getElementById(f.id);
+    range.addEventListener("input", function(){ box.value = range.value; onChange(); });
+    // the box may go past the slider's end (slide examples such as d = 600); the slider just pins at its end
+    box.addEventListener("input", function(){ range.value = box.value; onChange(); });
+  });
+}
+
+/** Read a number box, clamped to its minimum (and to 99.9 for a service level). */
+function readInput(def){
+  var v = Number(document.getElementById(def.id).value);
+  if(!isFinite(v)) v = def.value;
+  v = Math.max(def.min, v);
+  if(def.id.indexOf("SL") >= 0) v = Math.min(99.9, v);
+  return v;
+}
+
+function readAll(defs){
+  var out = {};
+  defs.forEach(function(f){ out[f.id] = readInput(f); });
+  return out;
+}
+
+function statTile(label, value, cls){
+  return '<div class="stat ' + (cls || "") + '"><div class="k">' + label + '</div><div class="v">' + value + "</div></div>";
+}
+
+/* ============================================================
+   6. Section 1 — reorder point
+   ============================================================ */
+
+function section1Params(){
+  var v = readAll(S1_INPUTS);
+  return {d:v.s1d, sd:v.s1sd, LT:v.s1LT, sdLT:v.s1sdLT, sl:v.s1SL/100, Q:Math.round(v.s1Q),
+          days:Math.round(v.s1Days), seed:Math.round(Number(document.getElementById("s1Seed").value) || 1)};
+}
+
+function section1Calc(r){
+  var z = fmt(r.z, 3), s = "";
+  s += "<h4>Calculation</h4>";
+  s += '<div class="case">Case: ' + r.caseName + "</div>";
+  s += '<div class="ln">z = ' + z + ' <span class="note">(service level ' + pct(r.sl) + ", read from the z table)</span></div>";
+  var ssWork;
+  if(r.caseName === "Variable demand"){
+    ssWork = "z × σ<sub>d</sub> × √LT = " + z + " × " + fmt(r.sd) + " × √" + fmt(r.LT);
+  }else if(r.caseName === "Variable lead time"){
+    ssWork = "z × d × σ<sub>LT</sub> = " + z + " × " + fmt(r.d) + " × " + fmt(r.sdLT);
+  }else if(r.caseName === "Variable demand and lead time"){
+    ssWork = "z × √(LT σ<sub>d</sub>² + d² σ<sub>LT</sub>²) = " + z + " × √(" + fmt(r.LT) + " × " + fmt(r.sd) + "² + " +
+             fmt(r.d) + "² × " + fmt(r.sdLT) + "²)";
+  }else{
+    ssWork = "0 (demand and lead time are both certain)";
+  }
+  s += '<div class="ln">SS = ' + ssWork + (r.ss > 0 ? " = <b>" + fmt(r.ss) + "</b>" : "") + "</div>";
+  s += '<div class="ln">ROP = d × LT + SS = ' + fmt(r.d) + " × " + fmt(r.LT) + " + " + fmt(r.ss) + " = " +
+       fmt(r.expected) + " + " + fmt(r.ss) + " = <b>" + fmt(r.rop) + " units</b></div>";
+  s += '<div class="note">Place an order of Q = ' + fmt(r.Q, 0) + " when the inventory position (on hand + on order) falls to the ROP.</div>";
+  return s;
+}
+
+/** Inventory chart shared by Sections 1 and 3. opt: {run, days, ss, rop, overlay, foi, P, OI}. */
+function drawInventoryChart(host, opt){
+  var W = 820, H = 380, ml = 62, mr = 16, mt = 30, mb = 96;
+  var plotB = H - mb, plotW = W - ml - mr, plotH = plotB - mt;
+  var run = opt.run;
+  var yTop = opt.rop || 0;
+  run.points.forEach(function(p){ yTop = Math.max(yTop, p[1]); });
+  if(opt.overlay) opt.overlay.points.forEach(function(p){ yTop = Math.max(yTop, p[1]); });
+  var yStep = niceStep(yTop*1.1 || 1, 5);
+  var yMax = Math.ceil(yTop*1.1/yStep)*yStep || 1;
+  var xMax = opt.days;
+  function x(t){ return ml + plotW*Math.min(t, xMax)/xMax; }
+  function y(v){ return mt + plotH*(1 - v/yMax); }
+
+  var s = '<svg class="wide" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="inventory on hand over time">';
+  s += '<defs><clipPath id="' + host.id + 'Clip"><rect x="' + ml + '" y="' + (mt - 20) + '" width="' + plotW + '" height="' + (plotH + 20) + '"/></clipPath></defs>';
+  // safety stock band
+  if(opt.ss > 0) s += '<rect x="' + ml + '" y="' + y(opt.ss).toFixed(1) + '" width="' + plotW + '" height="' +
+                      (y(0) - y(opt.ss)).toFixed(1) + '" fill="var(--ss)" opacity=".55"/>';
+  s += drawGrid({W:W, H:H, ml:ml, mr:mr, mt:mt, plotB:plotB, xMax:xMax, yMax:yMax, x:x, y:y,
+                 xTitle:"Day", yTitle:"On hand (units)"});
+  if(opt.ss > 0) s += svgText(W - mr - 6, y(opt.ss/2) + 5, "SS = " + fmt(opt.ss), "end", 14, "#15803d", 700);
+
+  s += '<g clip-path="url(#' + host.id + 'Clip)">';
+  if(opt.overlay){
+    s += '<path d="' + pathFromPoints(opt.overlay.points, x, y) + '" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>';
+  }
+  s += '<path d="' + pathFromPoints(run.points, x, y) + '" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>';
+  if(opt.rop){
+    s += svgLine(ml, y(opt.rop), W - mr, y(opt.rop), "var(--ink)", 1.6, ' stroke-dasharray="7 5"');
+  }
+  s += "</g>";
+  if(opt.rop) s += svgText(ml + 6, y(opt.rop) - 6, "ROP = " + fmt(opt.rop), "start", 14, "var(--ink)", 700);
+
+  // order and arrival markers
+  var i, o, a;
+  if(!opt.foi){
+    for(i = 0; i < run.orders.length; i++){
+      o = run.orders[i];
+      if(o.t > xMax) continue;
+      s += '<circle cx="' + x(o.t).toFixed(1) + '" cy="' + y(o.level).toFixed(1) + '" r="5" fill="var(--order)" stroke="#fff" stroke-width="1.5"><title>Order placed, day ' +
+           fmt(o.t, 1) + ", Q = " + fmt(o.qty, 0) + "</title></circle>";
+    }
+  }
+  for(i = 0; i < run.arrivals.length; i++){
+    a = run.arrivals[i];
+    if(a.t > xMax) continue;
+    s += '<circle cx="' + x(a.t).toFixed(1) + '" cy="' + y(a.after).toFixed(1) + '" r="4" fill="var(--accent)" stroke="#fff" stroke-width="1.5"><title>Order arrives, day ' +
+         fmt(a.t, 1) + ", +" + fmt(a.qty, 0) + "</title></circle>";
+  }
+
+  // Section 3: review days on the axis and each delivery's quantity above it
+  if(opt.foi){
+    run.reviews.forEach(function(r){
+      if(r.t > xMax) return;
+      s += '<path d="M' + x(r.t).toFixed(1) + " " + (plotB - 1) + " l-5 9 h10 z" + '" fill="var(--order)"><title>Review day ' + r.t + "</title></path>";
+    });
+    var gap = run.arrivals.length > 1 ? (x(run.arrivals[1].t) - x(run.arrivals[0].t)) : 999;
+    var every = Math.max(1, Math.ceil(34/Math.max(gap, 1)));
+    run.arrivals.forEach(function(a, k){
+      if(a.t > xMax || k % every) return;
+      var hl = (opt.highlight && Math.abs(a.t - opt.highlight.arrive) < 1e-6);
+      s += svgText(x(a.t), y(a.after) - 8, fmt(a.qty, 0), "middle", 14, hl ? "var(--order)" : "var(--accent)", 700);
+    });
+  }
+
+  // stockout segments on the time axis
+  run.stockouts.forEach(function(seg){
+    if(seg[0] > xMax) return;
+    s += svgLine(x(seg[0]), plotB, x(Math.max(seg[1], seg[0] + 0.15)), plotB, "var(--bad)", 6);
+  });
+
+  // brackets under the axis
+  var by = plotB + 34;
+  if(!opt.foi){
+    // lead time of each order, staggered on two rows so neighbours do not touch
+    for(i = 0; i < run.orders.length; i++){
+      o = run.orders[i];
+      if(o.t > xMax) continue;
+      var yy = by + (i % 2)*12;
+      s += svgLine(x(o.t), yy, x(o.at), yy, "var(--order)", 1.6);
+      s += svgLine(x(o.t), yy - 4, x(o.t), yy + 4, "var(--order)", 1.6);
+      s += svgLine(x(o.at), yy - 4, x(o.at), yy + 4, "var(--order)", 1.6);
+    }
+    s += svgText(ml, by + 32, "Lead time of each order", "start", 14, "var(--order)");
+  }else if(opt.highlight){
+    var h = opt.highlight;
+    s += svgLine(x(h.t), by, x(h.t + opt.P), by, "var(--order)", 2);
+    s += svgLine(x(h.t), by - 5, x(h.t), by + 5, "var(--order)", 2);
+    s += svgLine(x(h.t + opt.P), by - 5, x(h.t + opt.P), by + 5, "var(--order)", 2);
+    s += svgLine(x(h.arrive), by - 5, x(h.arrive), by + 5, "var(--order)", 1.2);
+    // label beside the bracket: to its right if there is room, otherwise below it
+    var label = "Protection interval OI + LT = " + fmt(opt.P) + " days (order placed day " + h.t + ")";
+    if(x(h.t + opt.P) < W - 380) s += svgText(x(h.t + opt.P) + 8, by + 5, label, "start", 14, "var(--order)", 700);
+    else s += svgText(x(h.t), by + 24, label, "start", 14, "var(--order)", 700);
+  }
+
+  s += "</svg>";
+  host.innerHTML = s;
+}
+
+function resultsStrip(run, target){
+  var ok = run.cycles && run.achieved >= target - 0.02;
+  return statTile("Cycles", fmt(run.cycles, 0)) +
+         statTile("Cycles with a stockout", fmt(run.badCycles, 0), run.badCycles ? "bad" : "good") +
+         statTile("Achieved SL (target " + pct(target) + ")", run.cycles ? pct(run.achieved) : "–", ok ? "good" : "bad") +
+         statTile("Average on hand", fmt(run.avgOnHand, 1)) +
+         statTile("Units short", fmt(run.unitsShort, 0), run.unitsShort > 0 ? "bad" : "good");
+}
+
+function updateSection1(){
+  var p = section1Params();
+  var r = reorderPoint(p.d, p.sd, p.LT, p.sdLT, p.sl);
+  r.Q = p.Q;
+  var run = simulateInventory({policy:"rop", d:p.d, sd:p.sd, LT:p.LT, sdLT:p.sdLT, ROP:r.rop, Q:p.Q,
+                               start:Math.round(r.ss + p.Q), days:p.days, seed:p.seed, record:true});
+  drawInventoryChart(document.getElementById("s1Chart"), {run:run, days:p.days, ss:r.ss, rop:r.rop});
+  document.getElementById("s1Stats").innerHTML = resultsStrip(run, p.sl);
+  document.getElementById("s1Calc").innerHTML = section1Calc(r);
+  document.getElementById("s1RunOut").textContent = "";
+  updateSection2(p, r);
+}
+
+/** "Run 1,000 cycles": no chart, just the achieved service level. */
+function run1000(){
+  var p = section1Params();
+  var r = reorderPoint(p.d, p.sd, p.LT, p.sdLT, p.sl);
+  var run = simulateInventory({policy:"rop", d:p.d, sd:p.sd, LT:p.LT, sdLT:p.sdLT, ROP:r.rop, Q:p.Q,
+                               start:Math.round(r.ss + p.Q), maxCycles:1000, seed:p.seed, record:false});
+  document.getElementById("s1RunOut").textContent = fmt(run.cycles, 0) + " cycles: " + fmt(run.badCycles, 0) +
+    " with a stockout, achieved service level " + pct(run.achieved) + " (target " + pct(p.sl) + ").";
+  return run;
+}
+
+/* ============================================================
+   7. Section 2 — where the safety stock comes from
+   ============================================================ */
+
+function ssFromParts(z, LT, sd, d, sdLT){
+  return z*Math.sqrt(LT*sd*sd + d*d*sdLT*sdLT);
+}
+
+function updateSection2(p, r){
+  document.getElementById("s2Echo").innerHTML =
+    "d = " + fmt(p.d) + ", σ<sub>d</sub> = " + fmt(p.sd) + ", LT = " + fmt(p.LT) + ", σ<sub>LT</sub> = " + fmt(p.sdLT) +
+    ", service level " + pct(p.sl) + " (z = " + fmt(r.z, 3) + ")";
+
+  var demPart = p.LT*p.sd*p.sd, ltPart = p.d*p.d*p.sdLT*p.sdLT, total = demPart + ltPart;
+  var host = document.getElementById("s2Chart");
+  var W = 820, H = 150, ml = 20, mr = 20, barY = 34, barH = 56, plotW = W - ml - mr;
+  var s = '<svg class="wide" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="variance of lead-time demand split into two parts">';
+  if(total <= 0){
+    s += '<rect x="' + ml + '" y="' + barY + '" width="' + plotW + '" height="' + barH + '" fill="#f1f5f9" rx="6"/>';
+    s += svgText(W/2, barY + barH/2 + 6, "No variance: demand and lead time are both certain, so SS = 0", "middle", 15, "var(--muted)", 600);
+  }else{
+    var wD = plotW*demPart/total, wL = plotW - wD;
+    s += '<rect x="' + ml + '" y="' + barY + '" width="' + wD.toFixed(1) + '" height="' + barH + '" fill="var(--accent)"/>';
+    s += '<rect x="' + (ml + wD).toFixed(1) + '" y="' + barY + '" width="' + wL.toFixed(1) + '" height="' + barH + '" fill="var(--order)"/>';
+    s += barLabel(ml, wD, barY, barH, "Demand part", demPart, demPart/total, "left");
+    s += barLabel(ml + wD, wL, barY, barH, "Lead-time part", ltPart, ltPart/total, "right");
+  }
+  s += svgText(ml, 20, "Variance of lead-time demand = " + fmt(total) + " units²", "start", 15, "var(--ink)", 700);
+  s += "</svg>";
+  host.innerHTML = s;
+
+  document.getElementById("s2Text").innerHTML = section2Sentence(p, r, demPart, ltPart);
+
+  document.getElementById("s2Calc").innerHTML = "<h4>Calculation</h4>" +
+    '<div class="ln">Demand part = LT × σ<sub>d</sub>² = ' + fmt(p.LT) + " × " + fmt(p.sd) + "² = <b>" + fmt(demPart) + "</b></div>" +
+    '<div class="ln">Lead-time part = d² × σ<sub>LT</sub>² = ' + fmt(p.d) + "² × " + fmt(p.sdLT) + "² = <b>" + fmt(ltPart) + "</b></div>" +
+    '<div class="ln">SD of lead-time demand = √(' + fmt(demPart) + " + " + fmt(ltPart) + ") = <b>" + fmt(Math.sqrt(total)) + "</b></div>" +
+    '<div class="ln">SS = z × SD = ' + fmt(r.z, 3) + " × " + fmt(Math.sqrt(total)) + " = <b>" + fmt(r.z*Math.sqrt(total)) + " units</b></div>" +
+    (p.sd > 0 && p.sdLT > 0 ?
+      '<div class="note">Adding the standard deviations instead would give z(σ<sub>d</sub>√LT + d σ<sub>LT</sub>) = ' +
+      fmt(r.z*(p.sd*Math.sqrt(p.LT) + p.d*p.sdLT)) + " units — too much. Variances add; standard deviations do not.</div>" : "");
+}
+
+/** One label inside a bar segment (or beside it when the segment is thin). */
+function barLabel(x0, w, barY, barH, name, value, share, side){
+  var text = name + ": " + fmt(value) + " (" + pct(share, 0) + ")";
+  if(w > 230){
+    return svgText(x0 + w/2, barY + barH/2 + 6, text, "middle", 15, "#fff", 700);
+  }
+  var colour = side === "left" ? "var(--accent)" : "var(--order)";
+  var tx = side === "left" ? x0 : x0 + w;
+  return svgText(tx, barY + barH + 22, text, side === "left" ? "start" : "end", 15, colour, 700);
+}
+
+function section2Sentence(p, r, demPart, ltPart){
+  var total = demPart + ltPart;
+  if(total <= 0) return "There is no uncertainty, so no safety stock is needed. Raise σ<sub>d</sub> or σ<sub>LT</sub> to see where it comes from.";
+  var s;
+  if(ltPart >= demPart){
+    s = "Lead-time uncertainty makes up <b>" + pct(ltPart/total, 0) + "</b> of the variance. ";
+  }else{
+    s = "Demand uncertainty makes up <b>" + pct(demPart/total, 0) + "</b> of the variance. ";
+  }
+  if(p.sdLT > 0){
+    var half = p.sdLT/2;
+    s += "Reducing the supplier's delivery spread from " + fmt(p.sdLT) + " day" + (p.sdLT === 1 ? "" : "s") + " to " + fmt(half) +
+         " days would cut the safety stock from <b>" + fmt(r.ss, 1) + "</b> to <b>" + fmt(ssFromParts(r.z, p.LT, p.sd, p.d, half), 1) + "</b> units.";
+  }else{
+    s += "Lead time is fixed, so all of the safety stock comes from demand. Halving σ<sub>d</sub> from " + fmt(p.sd) + " to " +
+         fmt(p.sd/2) + " would cut it from <b>" + fmt(r.ss, 1) + "</b> to <b>" + fmt(ssFromParts(r.z, p.LT, p.sd/2, p.d, 0), 1) +
+         "</b> units. Now try σ<sub>LT</sub> = 1 day.";
+  }
+  return s;
+}
+
+/* ============================================================
+   8. Section 3 — fixed order interval
+   ============================================================ */
+
+function section3Params(){
+  var v = readAll(S3_INPUTS);
+  return {d:v.s3d, sd:v.s3sd, OI:Math.round(v.s3OI), LT:Math.round(v.s3LT), sl:v.s3SL/100, A:v.s3A,
+          days:Math.round(v.s3Days), seed:Math.round(Number(document.getElementById("s3Seed").value) || 1),
+          compare:document.getElementById("s3Compare").checked};
+}
+
+function section3Calc(p, f){
+  var z = fmt(f.z, 3), s = "<h4>Calculation — the order placed today</h4>";
+  s += '<div class="ln">z = ' + z + ' <span class="note">(service level ' + pct(p.sl) + ")</span></div>";
+  s += '<div class="ln">Protection interval = OI + LT = ' + fmt(p.OI) + " + " + fmt(p.LT) + " = <b>" + fmt(f.P) + " days</b></div>";
+  s += '<div class="ln">SS = z × σ<sub>d</sub> × √(OI + LT) = ' + z + " × " + fmt(p.sd) + " × √" + fmt(f.P) + " = <b>" + fmt(f.ss) + "</b></div>";
+  s += '<div class="ln">Order-up-to level S = d(OI + LT) + SS = ' + fmt(p.d) + " × " + fmt(f.P) + " + " + fmt(f.ss) +
+       " = <b>" + fmt(f.S) + "</b></div>";
+  s += '<div class="ln">Q = d(OI + LT) + z σ<sub>d</sub> √(OI + LT) − A = ' + fmt(p.d) + " × " + fmt(f.P) + " + " + z + " × " +
+       fmt(p.sd) + " × √" + fmt(f.P) + " − " + fmt(p.A) + " = " + fmt(f.expected) + " + " + fmt(f.ss) + " − " + fmt(p.A) +
+       " = <b>" + fmt(f.Q) + " units</b></div>";
+  if(f.Q < 0) s += '<div class="note">A is above the order-up-to level, so nothing is ordered today.</div>';
+  s += '<div class="note">In the simulation every review orders S − (on hand + on order), so Q changes every cycle.</div>';
+  return s;
+}
+
+function updateSection3(){
+  var p = section3Params();
+  var f = fixedInterval(p.d, p.sd, p.OI, p.LT, p.sl, p.A);
+  var run = simulateInventory({policy:"foi", d:p.d, sd:p.sd, LT:p.LT, sdLT:0, OI:p.OI, S:f.S,
+                               start:Math.round(f.S - p.d*p.LT), days:p.days, seed:p.seed, record:true});
+
+  // highlight the order placed at the second review that actually ordered
+  var hl = null;
+  for(var i = 0; i < run.orders.length; i++){
+    if(run.orders[i].t >= p.OI){ hl = {t:run.orders[i].t, arrive:run.orders[i].at}; break; }
+  }
+
+  var overlay = null, rop = null;
+  if(p.compare){
+    rop = reorderPoint(p.d, p.sd, p.LT, 0, p.sl);
+    overlay = simulateInventory({policy:"rop", d:p.d, sd:p.sd, LT:p.LT, sdLT:0, ROP:rop.rop, Q:Math.round(p.d*p.OI),
+                                 start:Math.round(rop.ss + p.d*p.OI), days:p.days, seed:p.seed, record:true});
+  }
+  drawInventoryChart(document.getElementById("s3Chart"),
+    {run:run, days:p.days, ss:f.ss, foi:true, P:f.P, OI:p.OI, highlight:hl, overlay:overlay});
+  document.getElementById("s3Stats").innerHTML = resultsStrip(run, p.sl);
+  document.getElementById("s3Calc").innerHTML = section3Calc(p, f);
+  document.getElementById("s3LegendRop").classList.toggle("hidden", !p.compare);
+
+  var box = document.getElementById("s3CompareBox");
+  box.classList.toggle("hidden", !p.compare);
+  if(p.compare){
+    box.innerHTML = '<div class="calc"><h4>Fixed interval vs reorder point (same d, σ<sub>d</sub>, LT, service level)</h4>' +
+      '<div class="ln">FOI SS = z σ<sub>d</sub> √(OI + LT) = ' + fmt(f.z, 3) + " × " + fmt(p.sd) + " × √" + fmt(f.P) + " = <b>" + fmt(f.ss) + "</b></div>" +
+      '<div class="ln">ROP SS = z σ<sub>d</sub> √LT = ' + fmt(rop.z, 3) + " × " + fmt(p.sd) + " × √" + fmt(p.LT) + " = <b>" + fmt(rop.ss) + "</b></div>" +
+      '<div class="note">Simulated with the same demand: FOI average on hand ' + fmt(run.avgOnHand, 1) + ", achieved " + pct(run.achieved) +
+      "; ROP policy (Q = d × OI = " + fmt(Math.round(p.d*p.OI), 0) + ") average on hand " + fmt(overlay.avgOnHand, 1) + ", achieved " + pct(overlay.achieved) +
+      ". The fixed interval must protect over OI + LT, not just LT.</div></div>";
+  }
+}
+
+/* ============================================================
+   9. Section 4 — single period model
+   ============================================================ */
+
+function readDiscreteRows(){
+  var rows = [];
+  var trs = document.querySelectorAll("#s4Table tr");
+  for(var i = 0; i < trs.length; i++){
+    var ins = trs[i].querySelectorAll("input");
+    rows.push([Number(ins[0].value) || 0, Number(ins[1].value) || 0]);
+  }
+  return rows;
+}
+
+function buildDiscreteTable(rows){
+  var html = "";
+  rows.forEach(function(r){
+    html += '<tr><td><input type="number" step="any" value="' + r[0] + '" aria-label="demand"></td>' +
+            '<td><input type="number" step="any" value="' + r[1] + '" aria-label="relative frequency"></td><td class="cum"></td></tr>';
+  });
+  document.getElementById("s4Table").innerHTML = html;
+  var ins = document.querySelectorAll("#s4Table input");
+  for(var i = 0; i < ins.length; i++) ins[i].addEventListener("input", updateSection4);
+}
+
+function section4Params(){
+  function n(id){ return Number(document.getElementById(id).value) || 0; }
+  var type = document.getElementById("s4Dist").value;
+  var dist = {type:type, min:n("s4Min"), max:n("s4Max"), mean:n("s4Mean"), sd:n("s4SD"), rows:readDiscreteRows()};
+  return {price:n("s4Price"), cost:n("s4Cost"), salvage:n("s4Salv"), penalty:n("s4Pen"), dist:dist};
+}
+
+function distError(dist){
+  if(dist.type === "uniform" && !(dist.max > dist.min)) return "The maximum must be above the minimum.";
+  if(dist.type === "normal" && !(dist.sd > 0)) return "The SD must be positive.";
+  if(dist.type === "discrete" && dist.rows.length === 0) return "Add at least one row to the table.";
+  return "";
+}
+
+function section4Calc(p, r){
+  var s = "<h4>Calculation</h4>";
+  s += '<div class="ln">C<sub>s</sub> = price − cost' + (p.penalty ? " + penalty" : "") + " = " + fmt(p.price) + " − " + fmt(p.cost) +
+       (p.penalty ? " + " + fmt(p.penalty) : "") + " = <b>" + fmt(r.Cs) + "</b></div>";
+  s += '<div class="ln">C<sub>e</sub> = cost − salvage = ' + fmt(p.cost) + " − " + (p.salvage < 0 ? "(" + fmt(p.salvage) + ")" : fmt(p.salvage)) +
+       " = <b>" + fmt(r.Ce) + "</b></div>";
+  if(r.error && !(r.sl > 0)) return s;
+  s += '<div class="ln">Service level = C<sub>s</sub> / (C<sub>s</sub> + C<sub>e</sub>) = ' + fmt(r.Cs) + " / (" + fmt(r.Cs) + " + " + fmt(r.Ce) +
+       ") = <b>" + fmt(r.sl, 4) + "</b></div>";
+  var d = p.dist;
+  if(d.type === "uniform"){
+    s += '<div class="ln">S<sub>0</sub> = min + SL × (max − min) = ' + fmt(d.min) + " + " + fmt(r.sl, 4) + " × (" + fmt(d.max) + " − " + fmt(d.min) +
+         ") = <b>" + fmt(r.S0) + " units</b></div>";
+  }else if(d.type === "normal"){
+    s += '<div class="ln">z = ' + fmt(r.z, 3) + ' <span class="note">(from the z table at ' + fmt(r.sl, 4) + ")</span></div>";
+    s += '<div class="ln">S<sub>0</sub> = mean + z × SD = ' + fmt(d.mean) + " + " + fmt(r.z, 3) + " × " + fmt(d.sd) + " = <b>" + fmt(r.S0) + " units</b></div>";
+  }else if(r.pickRow >= 0){
+    s += '<div class="ln">S<sub>0</sub> = smallest demand whose cumulative frequency ≥ ' + fmt(r.sl, 4) + " = <b>" + fmt(r.S0) + " units</b></div>";
+    s += '<div class="note">The chosen row is highlighted in the table.</div>';
+  }
+  if(isFinite(r.S0)){
+    s += '<div class="ln">Expected profit at S<sub>0</sub> = <b>' + fmt(expectedProfit(r.S0, p.price, p.cost, p.salvage, p.penalty, d)) + "</b></div>";
+  }
+  return s;
+}
+
+function updateSection4(){
+  var p = section4Params();
+  var type = p.dist.type;
+  document.getElementById("s4Uni").classList.toggle("hidden", type !== "uniform");
+  document.getElementById("s4Norm").classList.toggle("hidden", type !== "normal");
+  document.getElementById("s4Disc").classList.toggle("hidden", type !== "discrete");
+
+  // discrete table: fill in the cumulative column and check the sum
+  var cum = 0, rows = p.dist.rows, cells = document.querySelectorAll("#s4Table td.cum");
+  for(var i = 0; i < rows.length; i++){ cum += rows[i][1]; if(cells[i]) cells[i].textContent = fmt(cum, 4); }
+  var sumWarn = document.getElementById("s4SumWarn");
+  var badSum = type === "discrete" && Math.abs(cum - 1) > 1e-6;
+  sumWarn.classList.toggle("hidden", !badSum);
+  sumWarn.textContent = "The relative frequencies add up to " + fmt(cum, 4) + ", not 1.";
+
+  var err = distError(p.dist);
+  var r = err ? null : singlePeriod(p.price, p.cost, p.salvage, p.penalty, p.dist);
+  var msg = err || (r && r.error) || "";
+  var warn = document.getElementById("s4Warn");
+  warn.classList.toggle("hidden", !msg);
+  warn.textContent = msg;
+
+  var trs = document.querySelectorAll("#s4Table tr");
+  for(i = 0; i < trs.length; i++) trs[i].classList.toggle("pick", !!(r && r.pickRow === i));
+
+  if(err){
+    document.getElementById("s4DemChart").innerHTML = "";
+    document.getElementById("s4ProfChart").innerHTML = "";
+    document.getElementById("s4Calc").innerHTML = "";
+    return;
+  }
+  document.getElementById("s4Calc").innerHTML = section4Calc(p, r);
+  drawDemandChart(document.getElementById("s4DemChart"), p.dist, r);
+  drawProfitChart(document.getElementById("s4ProfChart"), p, r);
+}
+
+/** Stock levels to plot: the demand range with a margin. */
+function stockRange(dist){
+  if(dist.type === "uniform"){
+    var w = dist.max - dist.min;
+    return {lo:Math.max(0, dist.min - 0.25*w), hi:dist.max + 0.15*w};
+  }
+  if(dist.type === "normal") return {lo:Math.max(0, dist.mean - 3.5*dist.sd), hi:dist.mean + 3.5*dist.sd};
+  var lo = Infinity, hi = -Infinity;
+  dist.rows.forEach(function(r){ lo = Math.min(lo, r[0]); hi = Math.max(hi, r[0]); });
+  return {lo:lo - 0.6, hi:hi + 0.6};
+}
+
+var SMALL = {W:470, H:330, ml:62, mr:14, mt:30, mb:48};
+
+function drawDemandChart(host, dist, r){
+  var g = SMALL, plotB = g.H - g.mb, plotW = g.W - g.ml - g.mr, plotH = plotB - g.mt;
+  var rg = stockRange(dist);
+  var yTop, s, i;
+  if(dist.type === "uniform") yTop = 1/(dist.max - dist.min);
+  else if(dist.type === "normal") yTop = normPdf(0)/dist.sd;
+  else { yTop = 0; dist.rows.forEach(function(row){ yTop = Math.max(yTop, row[1]); }); }
+  var yMax = yTop*1.25 || 1;
+  function x(v){ return g.ml + plotW*(v - rg.lo)/(rg.hi - rg.lo); }
+  function y(v){ return g.mt + plotH*(1 - v/yMax); }
+
+  s = '<svg viewBox="0 0 ' + g.W + " " + g.H + '" role="img" aria-label="demand distribution">';
+  s += drawGrid({W:g.W, H:g.H, ml:g.ml, mr:g.mr, mt:g.mt, plotB:plotB, xMin:rg.lo, xMax:rg.hi, yMax:yMax, x:x, y:y,
+                 xTitle:"Demand", yTitle:dist.type === "discrete" ? "Relative frequency" : "Density", intX:dist.type === "discrete"});
+  var S0 = r && isFinite(r.S0) ? r.S0 : null;
+
+  if(dist.type === "uniform"){
+    var cut = S0 === null ? dist.min : Math.min(Math.max(S0, dist.min), dist.max);
+    s += '<rect x="' + x(dist.min).toFixed(1) + '" y="' + y(yTop).toFixed(1) + '" width="' + (x(cut) - x(dist.min)).toFixed(1) +
+         '" height="' + (plotB - y(yTop)).toFixed(1) + '" fill="var(--accent)" opacity=".3"/>';
+    s += '<path d="M' + x(dist.min).toFixed(1) + " " + plotB + " V" + y(yTop).toFixed(1) + " H" + x(dist.max).toFixed(1) + " V" + plotB +
+         '" fill="none" stroke="var(--accent)" stroke-width="2.4"/>';
+  }else if(dist.type === "normal"){
+    var dLine = "", dFill = "", N = 160, v;
+    for(i = 0; i <= N; i++){
+      v = rg.lo + (rg.hi - rg.lo)*i/N;
+      var yy = y(normPdf((v - dist.mean)/dist.sd)/dist.sd);
+      dLine += (i ? " L" : "M") + x(v).toFixed(1) + " " + yy.toFixed(1);
+      if(S0 !== null && v <= S0) dFill += " L" + x(v).toFixed(1) + " " + yy.toFixed(1);
+    }
+    if(S0 !== null){
+      var yS = y(normPdf((S0 - dist.mean)/dist.sd)/dist.sd);
+      s += '<path d="M' + x(rg.lo).toFixed(1) + " " + plotB + dFill + " L" + x(S0).toFixed(1) + " " + yS.toFixed(1) + " L" + x(S0).toFixed(1) + " " + plotB +
+           ' Z" fill="var(--accent)" opacity=".3"/>';
+    }
+    s += '<path d="' + dLine + '" fill="none" stroke="var(--accent)" stroke-width="2.4"/>';
+  }else{
+    var bw = Math.min(40, plotW/(rg.hi - rg.lo)*0.6);
+    dist.rows.forEach(function(row){
+      var inside = S0 !== null && row[0] <= S0;
+      s += '<rect x="' + (x(row[0]) - bw/2).toFixed(1) + '" y="' + y(row[1]).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' +
+           (plotB - y(row[1])).toFixed(1) + '" fill="' + (inside ? "var(--accent)" : "#cbd5e1") + '" opacity="' + (inside ? ".75" : "1") + '"/>';
+    });
+  }
+  if(S0 !== null){
+    s += svgLine(x(S0), g.mt - 6, x(S0), plotB, "var(--ok)", 2.2);
+    var anchor = x(S0) > g.ml + plotW*0.6 ? "end" : "start", dx = anchor === "end" ? -6 : 6;
+    s += svgText(x(S0) + dx, g.mt + 8, "S₀ = " + fmt(S0), anchor, 14, "var(--ok)", 700);
+    s += svgText(x(S0) + dx, g.mt + 26, "SL = " + pct(r.sl), anchor, 14, "var(--accent)", 700);
+  }
+  s += "</svg>";
+  host.innerHTML = s;
+}
+
+function drawProfitChart(host, p, r){
+  var g = SMALL, plotB = g.H - g.mb, plotW = g.W - g.ml - g.mr, plotH = plotB - g.mt;
+  var dist = p.dist, rg = stockRange(dist);
+  var pts = [], i, S, v;
+  if(dist.type === "discrete"){
+    for(S = Math.max(0, Math.ceil(rg.lo)); S <= Math.floor(rg.hi); S++) pts.push([S, expectedProfit(S, p.price, p.cost, p.salvage, p.penalty, dist)]);
+  }else{
+    for(i = 0; i <= 160; i++){
+      S = rg.lo + (rg.hi - rg.lo)*i/160;
+      pts.push([S, expectedProfit(S, p.price, p.cost, p.salvage, p.penalty, dist)]);
+    }
+  }
+  var lo = Infinity, hi = -Infinity;
+  pts.forEach(function(q){ lo = Math.min(lo, q[1]); hi = Math.max(hi, q[1]); });
+  var yStep = niceStep((hi - Math.min(lo, 0)) || 1, 5);
+  var yMin = Math.floor(Math.min(lo, 0)/yStep)*yStep, yMaxV = Math.ceil(hi/yStep)*yStep + yStep*0.5;
+  function x(val){ return g.ml + plotW*(val - rg.lo)/(rg.hi - rg.lo); }
+  function y(val){ return g.mt + plotH*(1 - (val - yMin)/(yMaxV - yMin)); }
+
+  var s = '<svg viewBox="0 0 ' + g.W + " " + g.H + '" role="img" aria-label="expected profit against stock level">';
+  for(v = yMin; v <= yMaxV + 1e-9; v += yStep){
+    s += svgLine(g.ml, y(v), g.W - g.mr, y(v), v === 0 ? "#cbd5e1" : "var(--grid)", 1);
+    s += svgText(g.ml - 7, y(v) + 5, fmt(v, 2), "end", 14, "var(--muted)");
+  }
+  var xStep = niceStep(rg.hi - rg.lo, 6);
+  if(dist.type === "discrete") xStep = Math.max(1, Math.round(xStep));
+  for(v = Math.ceil(rg.lo/xStep)*xStep; v <= rg.hi + 1e-9; v += xStep){
+    s += svgText(x(v), plotB + 19, fmt(v, 2), "middle", 14, "var(--muted)");
+  }
+  s += svgLine(g.ml, plotB, g.W - g.mr, plotB, "var(--ink)", 1.2) + svgLine(g.ml, g.mt, g.ml, plotB, "var(--ink)", 1.2);
+  s += svgText(g.ml + plotW/2, g.H - 6, "Stock level", "middle", 14, "var(--muted)");
+  s += '<text transform="translate(15 ' + ((g.mt + plotB)/2) + ') rotate(-90)" text-anchor="middle" font-size="14" fill="var(--muted)">Expected profit</text>';
+
+  s += '<path d="' + pathFromPoints(pts, x, y) + '" fill="none" stroke="var(--accent)" stroke-width="2.4"/>';
+  if(dist.type === "discrete"){
+    pts.forEach(function(q){ s += '<circle cx="' + x(q[0]).toFixed(1) + '" cy="' + y(q[1]).toFixed(1) + '" r="4" fill="var(--accent)"/>'; });
+  }
+  if(r && isFinite(r.S0)){
+    var best = expectedProfit(r.S0, p.price, p.cost, p.salvage, p.penalty, dist);
+    s += svgLine(x(r.S0), g.mt - 6, x(r.S0), plotB, "var(--ok)", 2.2, ' stroke-dasharray="5 4"');
+    s += '<circle cx="' + x(r.S0).toFixed(1) + '" cy="' + y(best).toFixed(1) + '" r="6.5" fill="var(--ok)" stroke="#fff" stroke-width="2"/>';
+    var anchor = x(r.S0) > g.ml + plotW*0.6 ? "end" : "start", dx = anchor === "end" ? -8 : 8;
+    s += svgText(x(r.S0) + dx, g.mt + 8, "S₀ = " + fmt(r.S0) + ", profit " + fmt(best), anchor, 14, "var(--ok)", 700);
+  }
+  s += "</svg>";
+  host.innerHTML = s;
+}
+
+/* ============================================================
+   10. Wiring
+   ============================================================ */
+
+function newSeed(){
+  return 1 + Math.floor(Math.random()*99999);
+}
+
+function init(){
+  buildInputs("s1Inputs", S1_INPUTS, updateSection1);
+  buildInputs("s3Inputs", S3_INPUTS, updateSection3);
+  buildDiscreteTable(DISCRETE_DEFAULT);
+
+  document.getElementById("s1Seed").addEventListener("input", updateSection1);
+  document.getElementById("s1New").addEventListener("click", function(){
+    document.getElementById("s1Seed").value = newSeed(); updateSection1();
+  });
+  document.getElementById("s1Run1000").addEventListener("click", run1000);
+
+  document.getElementById("s3Seed").addEventListener("input", updateSection3);
+  document.getElementById("s3Compare").addEventListener("change", updateSection3);
+  document.getElementById("s3New").addEventListener("click", function(){
+    document.getElementById("s3Seed").value = newSeed(); updateSection3();
+  });
+
+  ["s4Price", "s4Cost", "s4Salv", "s4Pen", "s4Dist", "s4Min", "s4Max", "s4Mean", "s4SD"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", updateSection4);
+  });
+  document.getElementById("s4AddRow").addEventListener("click", function(){
+    var rows = readDiscreteRows();
+    var last = rows.length ? rows[rows.length - 1][0] : -1;
+    rows.push([last + 1, 0]);
+    buildDiscreteTable(rows); updateSection4();
+  });
+  document.getElementById("s4DelRow").addEventListener("click", function(){
+    var rows = readDiscreteRows();
+    rows.pop();
+    buildDiscreteTable(rows); updateSection4();
+  });
+
+  updateSection1();
+  updateSection3();
+  updateSection4();
+  if(location.search.indexOf("test") >= 0 || location.hash.indexOf("test") >= 0) runTests();
+}
+
+/* ============================================================
+   11. Acceptance checks — open with ?test and read the console
+   ============================================================ */
+
+function runTests(){
+  var results = [];
+  function check(name, got, want, tol){
+    var ok = Math.abs(got - want) <= (tol === undefined ? 0.005 : tol);
+    results.push({test:name, got:Number(Number(got).toFixed(4)), expected:want, pass:ok});
+  }
+
+  // Worked examples from the 07b slides (spec section 7)
+  check("variable demand ROP", reorderPoint(50, 3, 2, 0, 0.90).rop, 105.43);
+  check("variable LT ROP", reorderPoint(600, 0, 6, 2, 0.90).rop, 5136);
+  check("hostel water ROP", reorderPoint(500, 0, 5, 2, 0.95).rop, 4145);
+  check("both variable ROP", reorderPoint(25, 3, 10, 2, 0.95).rop, 334, 0.5);
+  check("hostel cups ROP", reorderPoint(15, 5, 12, 3, 0.98).rop, 278.8, 0.06);
+  check("FOI Q", fixedInterval(30, 3, 7, 2, 0.99, 71).Q, 220, 0.05);
+  check("salad uniform S0", singlePeriod(32, 8, 0, 0, {type:"uniform", min:30, max:50}).S0, 45);
+  check("salad normal S0", singlePeriod(32, 8, 0, 0, {type:"normal", mean:20, sd:3}).S0, 22.01);
+  check("cake discrete stock", singlePeriod(60, 33, 30, 0, {type:"discrete", rows:[[0,.15],[1,.35],[2,.30],[3,.20]]}).S0, 3, 0);
+
+  // Homework 7b
+  check("P1 ROP", reorderPoint(20, 4, 4, 0, 0.95).rop, 93.16);
+  check("P1 sigma_LT only", reorderPoint(20, 0, 4, 1, 0.95).rop, 112.90);
+  check("P1 both", reorderPoint(20, 4, 4, 1, 0.95).rop, 115.43);
+  check("P2 Q", fixedInterval(12, 3, 14, 3, 0.99, 40).Q, 192.82);
+  check("P3 S0", singlePeriod(60, 25, 0, 0, {type:"normal", mean:80, sd:10}).S0, 82.1);
+  // z table rule gives z = 0.76 at SL 0.7778, so 87.6 (the key's 87.7 used z = 0.77)
+  check("P3 S0 with salvage 15", singlePeriod(60, 25, 15, 0, {type:"normal", mean:80, sd:10}).S0, 87.6);
+
+  // Case names and the z rule
+  results.push({test:"case: no uncertainty", got:reorderPoint(20, 0, 4, 0, 0.95).caseName, expected:"No uncertainty",
+                pass:reorderPoint(20, 0, 4, 0, 0.95).caseName === "No uncertainty"});
+  check("z at 95% is 1.645", zFromServiceLevel(0.95), 1.645, 0);
+  check("z at 99% is 2.33", zFromServiceLevel(0.99), 2.33, 0);
+
+  // Section 2 sentence numbers: 86% and 35.4 -> 21.1
+  check("S2 lead-time share", 400/464, 0.862, 0.001);
+  check("S2 SS at sigma_LT 0.5", ssFromParts(1.645, 4, 4, 20, 0.5), 21.07, 0.01);
+
+  // Expected profit peaks at S0 (uniform salad)
+  var sal = {type:"uniform", min:30, max:50};
+  var e0 = expectedProfit(45, 32, 8, 0, 0, sal);
+  results.push({test:"profit peaks at S0", got:e0.toFixed(2), expected:"> neighbours",
+                pass:e0 > expectedProfit(43, 32, 8, 0, 0, sal) && e0 > expectedProfit(47, 32, 8, 0, 0, sal)});
+
+  // Same seed gives the same run
+  var cfg = {policy:"rop", d:20, sd:4, LT:4, sdLT:0, ROP:93.16, Q:200, start:213, days:180, seed:42, record:false};
+  var a = simulateInventory(cfg), b = simulateInventory(cfg);
+  results.push({test:"same seed, same run", got:a.unitsShort.toFixed(3) + "/" + a.cycles, expected:b.unitsShort.toFixed(3) + "/" + b.cycles,
+                pass:a.unitsShort === b.unitsShort && a.cycles === b.cycles && a.avgOnHand === b.avgOnHand});
+
+  // Section 1 defaults, 1,000 cycles: within about 2 points of 95%
+  var big = simulateInventory({policy:"rop", d:20, sd:4, LT:4, sdLT:0, ROP:93.16, Q:200, start:213, maxCycles:1000, seed:1, record:false});
+  check("1,000 cycles near 95%", big.achieved, 0.95, 0.02);
+  var foi = simulateInventory({policy:"foi", d:30, sd:3, LT:2, sdLT:0, OI:7, S:fixedInterval(30, 3, 7, 2, 0.99, 71).S,
+                               start:231, maxCycles:1000, seed:1, record:false});
+  check("FOI 1,000 cycles near 99%", foi.achieved, 0.99, 0.02);
+
+  console.table(results);
+  var failed = results.filter(function(x){ return !x.pass; });
+  console.log(failed.length ? failed.length + " CHECK(S) FAILED" : "all " + results.length + " checks passed");
+  window.__testResults = results;
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
