@@ -40,7 +40,7 @@
   button{font:inherit;font-size:17px;font-weight:600;padding:7px 14px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:var(--ink);cursor:pointer}
   button:disabled{opacity:.4;cursor:default}
   select,input[type=text],input[type=number]{font:inherit;font-size:17px;padding:5px 8px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:var(--ink)}
-  h2{font-size:20px;margin:22px 0 8px}
+  h2{font-size:21px;margin:22px 0 8px}
 
   /* A. top bar */
   .topbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:12px}
@@ -70,26 +70,50 @@
   .dataBar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 
   /* C. pool and D. sequence line */
-  .zone{border:2px dashed #d1d5db;border-radius:14px;padding:10px;min-height:86px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
-  .zone.over{border-color:var(--accent);background:var(--accent-soft)}
-  .zoneHead{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between}
+  .panel{border:1px solid var(--line);border-radius:16px;padding:14px 18px;margin-top:16px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .panel h2{margin:0}
+  .zoneHead{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;justify-content:space-between;margin-bottom:10px}
   .zoneHead .hint{font-size:15px;color:var(--muted)}
-  .card{display:flex;align-items:stretch;border:2px solid #9ca3af;border-radius:10px;background:#fff;font-size:18px;
-        cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;min-height:46px}
-  .card:focus{outline:3px solid #93c5fd;outline-offset:2px}
-  .card > span{padding:8px 10px;border-left:1px solid var(--line);white-space:nowrap;display:flex;align-items:center}
-  .card > span:first-child{border-left:0;font-weight:800;font-size:20px}
-  .card .due{color:var(--muted)}
-  .card.ghost{position:fixed;z-index:50;pointer-events:none;opacity:.9;box-shadow:0 8px 22px rgba(0,0,0,.25);cursor:grabbing}
-  .card.lifted{opacity:.3}
-  .slot{display:flex;flex-direction:column;align-items:center;gap:3px}
-  .slot .num{font-size:15px;font-weight:700;color:var(--muted)}
-  .slot.empty .box{width:84px;height:46px;border:2px dashed #d1d5db;border-radius:10px}
-  .slot.insertBefore .card{box-shadow:-6px 0 0 -1px var(--accent)}
-  .seqLine.insertEnd .slot.lastFilled .card{box-shadow:6px 0 0 -1px var(--accent)}
-  .card .mv{display:flex;align-items:center;gap:2px;padding:4px 6px}
-  .card .mv button{padding:2px 8px;font-size:16px;border-radius:7px;min-width:34px}
-  .seqBar{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0}
+  .jobsGrid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:start}
+  .zone{border:2px dashed #cbd5e1;border-radius:14px;padding:12px;min-height:92px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;
+        background:#f8fafc;transition:background .15s,border-color .15s}
+  .zone.over{border-color:var(--accent);background:var(--accent-soft)}
+  .zone .muted{font-size:16px}
+
+  /* letter tiles: only the job name is dragged */
+  .card{width:62px;height:62px;border-radius:14px;border:2px solid var(--accent);background:#fff;color:var(--accent);
+        display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;
+        cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;
+        box-shadow:0 2px 0 #bfdbfe;transition:transform .1s,box-shadow .1s}
+  .card:focus{outline:3px solid #93c5fd;outline-offset:3px}
+  .card[data-where="seq"]{background:var(--accent);color:#fff;border-color:#1d4ed8;box-shadow:0 2px 0 #1e40af}
+  .card.ghost{position:fixed;z-index:50;pointer-events:none;transform:scale(1.12) rotate(-3deg);box-shadow:0 10px 24px rgba(0,0,0,.25);cursor:grabbing}
+  .card.lifted{opacity:.25}
+  @media (hover:hover){ .card:hover{transform:translateY(-2px)} }
+
+  /* sequence slots */
+  .seqLine{gap:6px;align-items:flex-start}
+  .slot{display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;padding:0 10px}
+  .slot:not(:last-child)::after{content:"›";position:absolute;right:-7px;top:44px;font-size:26px;color:#94a3b8;font-weight:700}
+  .slot .num{width:26px;height:26px;border-radius:50%;background:#e2e8f0;color:#334155;font-size:14px;font-weight:800;
+             display:flex;align-items:center;justify-content:center}
+  .slot.empty .box{width:62px;height:62px;border:2px dashed #cbd5e1;border-radius:14px;background:#fff}
+  .slot.insertBefore .card{box-shadow:-9px 0 0 -3px var(--ink)}
+  .seqLine.insertEnd .slot.lastFilled .card{box-shadow:9px 0 0 -3px var(--ink)}
+  .mv{display:flex;gap:3px}
+  .mvSpace{height:26px}
+  .mv button{padding:0;width:26px;height:26px;font-size:13px;border-radius:7px;line-height:1}
+  .seqBar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
+
+  /* job table beside the pool */
+  table.info{border-collapse:separate;border-spacing:0;font-size:18px;font-variant-numeric:tabular-nums}
+  table.info th{font-size:14px;color:var(--muted);font-weight:700;padding:4px 12px;text-align:center;border-bottom:2px solid var(--line)}
+  table.info td{padding:5px 12px;text-align:center;border-bottom:1px solid var(--line)}
+  table.info td.jn{font-weight:800;color:var(--accent)}
+  table.info tr.placed td{background:#f8fafc;color:var(--muted)}
+  table.info tr.placed td.jn{color:var(--muted)}
+  table.info tr.hl td{background:#fef9c3}
+  .pos{display:inline-block;min-width:30px;padding:1px 8px;border-radius:999px;background:var(--accent);color:#fff;font-size:14px;font-weight:800}
 
   /* E. Gantt chart */
   .chartBox{border:1px solid var(--line);border-radius:12px;padding:6px 4px 2px;overflow-x:auto;position:relative}
@@ -124,7 +148,8 @@
   html{-webkit-text-size-adjust:100%}
   @media (pointer:coarse){
     button, select{min-height:44px}
-    .card .mv button{min-height:40px;min-width:40px}
+    .mv button{min-height:36px;width:36px;height:36px}
+    .mvSpace{height:36px}
   }
   @media (hover:hover){ button:hover:not(:disabled){background:#f3f4f6} }
 
@@ -132,10 +157,10 @@
   @media screen and (max-width:640px){
     .wrap{padding:12px 10px 48px}
     .topbar h1{font-size:22px}
-    /* a sequence card with its arrow buttons is wider than a phone: let it wrap */
-    .slot{max-width:100%}
-    .card{flex-wrap:wrap;max-width:100%}
-    .card .mv{border-left:0;width:100%;justify-content:flex-end;border-top:1px solid var(--line)}
+    .jobsGrid{grid-template-columns:minmax(0,1fr)}
+    .slot{padding:0 6px}
+    table.info{font-size:16px}
+    table.info th, table.info td{padding:4px 8px}
   }
 
   /* print: chart, table and results on one page */
@@ -155,7 +180,7 @@
     .res .f{font-size:11px}
     .res.big{flex-basis:auto}
     .res .v{font-size:18px} .res.big .v{font-size:24px}
-    .card .mv{display:none}
+    .mv{display:none}
     h2{margin:10px 0 4px;font-size:16px}
   }
 </style>
@@ -195,20 +220,23 @@
   <div style="overflow-x:auto"><table class="dataT" id="dataT"></table></div>
 </details>
 
-<!-- C. Job pool -->
-<section id="poolSec">
+<!-- C. Job pool, with the job data beside it -->
+<section id="poolSec" class="panel">
   <div class="zoneHead">
     <h2>Jobs</h2>
-    <span class="hint noprint">Drag a card into the sequence, or double-click (double-tap) it to add it at the end.</span>
+    <span class="hint noprint">Drag a job letter into the sequence, or double-click (double-tap) it to add it at the end.</span>
   </div>
-  <div class="zone" id="pool" aria-label="Job pool"></div>
+  <div class="jobsGrid">
+    <div class="zone" id="pool" aria-label="Job pool"></div>
+    <div style="overflow-x:auto"><table class="info" id="jobInfo"></table></div>
+  </div>
 </section>
 
 <!-- D. Sequence line -->
-<section id="seqSec">
+<section id="seqSec" class="panel">
   <div class="zoneHead">
     <h2>Sequence</h2>
-    <span class="hint noprint">Drag to reorder. Drag a card back to Jobs to remove it.</span>
+    <span class="hint noprint">Drag to reorder · ◀ ▶ move one place · ✕ or drag back to Jobs to remove.</span>
   </div>
   <div class="zone seqLine" id="seq" aria-label="Sequence line"></div>
   <div class="seqBar noprint">
@@ -419,26 +447,49 @@ function clearSequenceAndHistory(){
 /* ============================================================
    4. Cards: pool and sequence line
    ============================================================ */
+/** A job tile carries only the job name; the times and due date are in the job table. */
 function cardHtml(jobIndex, where, pos){
   var j = state.jobs[jobIndex];
-  var s = '<div class="card" tabindex="0" data-job="' + jobIndex + '" data-where="' + where + '"' +
-          (where === "seq" ? ' data-pos="' + pos + '"' : "") + ' aria-label="Job ' + esc(j.name) + '">';
-  s += "<span>" + esc(j.name) + "</span>";
-  if(state.machines === 2){
-    s += "<span>" + esc(state.names[0]) + "&nbsp;" + num(j.t[0]) + "</span>";
-    s += "<span>" + esc(state.names[1]) + "&nbsp;" + num(j.t[1]) + "</span>";
-  }else{
-    s += "<span>Time&nbsp;" + num(j.t[0]) + "</span>";
-  }
-  if(j.due !== null) s += '<span class="due">Due&nbsp;' + num(j.due) + "</span>";
-  if(where === "seq"){
-    var last = pos === state.sequence.length - 1;
-    s += '<span class="mv noprint">' +
+  return '<div class="card" tabindex="0" data-job="' + jobIndex + '" data-where="' + where + '"' +
+         (where === "seq" ? ' data-pos="' + pos + '"' : "") + ' aria-label="Job ' + esc(j.name) + '" title="' + esc(jobSummary(j)) + '">' +
+         esc(j.name) + "</div>";
+}
+
+/** "Print 9 · Bind 8 · Due 33": shown as a tooltip on the tile. */
+function jobSummary(j){
+  var parts = state.machines === 2 ? [state.names[0] + " " + num(j.t[0]), state.names[1] + " " + num(j.t[1])] : ["Time " + num(j.t[0])];
+  if(j.due !== null) parts.push("Due " + num(j.due));
+  return parts.join(" · ");
+}
+
+/** Move and remove buttons under a tile in the sequence line. */
+function moveButtonsHtml(pos){
+  var last = pos === state.sequence.length - 1;
+  return '<div class="mv noprint">' +
          '<button data-act="left" aria-label="Move left"' + (pos === 0 ? " disabled" : "") + ">◀</button>" +
-         '<button data-act="right" aria-label="Move right"' + (last ? " disabled" : "") + ">▶</button>" +
-         '<button data-act="remove" aria-label="Back to jobs">✕</button></span>';
-  }
-  return s + "</div>";
+         '<button data-act="remove" aria-label="Back to jobs">✕</button>' +
+         '<button data-act="right" aria-label="Move right"' + (last ? " disabled" : "") + ">▶</button></div>";
+}
+
+/** The job table beside the pool: all jobs in the original order, with their place in the sequence. */
+function renderJobInfo(){
+  var two = state.machines === 2;
+  var hasDue = state.jobs.some(function(j){ return j.due !== null; });
+  var h = "<thead><tr><th>Job</th>" + (two ? "<th>" + esc(state.names[0]) + "</th><th>" + esc(state.names[1]) + "</th>" : "<th>Time</th>") +
+          (hasDue ? "<th>Due</th>" : "") + "<th>Seq</th></tr></thead><tbody>";
+  state.jobs.forEach(function(j, i){
+    var pos = state.sequence.indexOf(i);
+    h += '<tr data-job="' + i + '"' + (pos >= 0 ? ' class="placed"' : "") + '><td class="jn">' + esc(j.name) + "</td><td>" + num(j.t[0]) + "</td>" +
+         (two ? "<td>" + num(j.t[1]) + "</td>" : "") + (hasDue ? "<td>" + (j.due === null ? "–" : num(j.due)) + "</td>" : "") +
+         "<td>" + (pos >= 0 ? '<span class="pos">' + (pos + 1) + "</span>" : "") + "</td></tr>";
+  });
+  document.getElementById("jobInfo").innerHTML = h + "</tbody>";
+}
+
+/** While a tile is dragged, its row in the job table lights up. */
+function highlightJobRow(jobIndex){
+  var rows = document.querySelectorAll("#jobInfo tr[data-job]");
+  for(var i = 0; i < rows.length; i++) rows[i].classList.toggle("hl", Number(rows[i].dataset.job) === jobIndex);
 }
 
 function renderPool(){
@@ -447,7 +498,7 @@ function renderPool(){
   for(var i = 0; i < state.jobs.length; i++){
     if(state.sequence.indexOf(i) < 0) html += cardHtml(i, "pool");
   }
-  if(!html) html = '<span class="muted" style="padding:10px">All jobs are in the sequence.</span>';
+  if(!html) html = '<span class="muted">All jobs are in the sequence.</span>';
   document.getElementById("pool").innerHTML = html;
 }
 
@@ -457,9 +508,9 @@ function renderSequence(){
     if(k < state.sequence.length){
       var cls = "slot" + (k === state.sequence.length - 1 ? " lastFilled" : "");
       html += '<div class="' + cls + '" data-slot="' + k + '"><span class="num">' + (k + 1) + "</span>" +
-              cardHtml(state.sequence[k], "seq", k) + "</div>";
+              cardHtml(state.sequence[k], "seq", k) + moveButtonsHtml(k) + "</div>";
     }else{
-      html += '<div class="slot empty" data-slot="' + k + '"><span class="num">' + (k + 1) + '</span><div class="box"></div></div>';
+      html += '<div class="slot empty" data-slot="' + k + '"><span class="num">' + (k + 1) + '</span><div class="box"></div><div class="mvSpace"></div></div>';
     }
   }
   document.getElementById("seq").innerHTML = html;
@@ -495,6 +546,7 @@ function onCardPointerMove(e){
     drag.ghost.style.width = r.width + "px";
     document.body.appendChild(drag.ghost);
     drag.card.classList.add("lifted");
+    highlightJobRow(drag.job);
   }
   drag.ghost.style.left = (e.clientX - drag.dx) + "px";
   drag.ghost.style.top = (e.clientY - drag.dy) + "px";
@@ -510,6 +562,7 @@ function onCardPointerUp(e){
     d.ghost.remove();
     d.card.classList.remove("lifted");
     showDropTarget(null);
+    highlightJobRow(-1);
     applyDrop(d, target);
     return;
   }
@@ -528,6 +581,7 @@ function onCardPointerCancel(){
   if(drag.ghost) drag.ghost.remove();
   drag.card.classList.remove("lifted");
   showDropTarget(null);
+  highlightJobRow(-1);
   drag = null;
 }
 
@@ -573,7 +627,7 @@ function applyDrop(d, target){
 function onSeqButton(e){
   var b = e.target.closest("button[data-act]");
   if(!b) return;
-  var pos = Number(b.closest(".card").dataset.pos);
+  var pos = Number(b.closest(".slot").dataset.slot);
   if(b.dataset.act === "left") moveInSequence(pos, pos - 1);
   else if(b.dataset.act === "right") moveInSequence(pos, pos + 2);
   else removeFromSequence(pos);
@@ -891,6 +945,7 @@ function setMode(machines){
 function renderAll(){
   document.getElementById("subtitle").textContent = state.title + " · " + state.jobs.length + " jobs · time in " + state.unit;
   renderPool();
+  renderJobInfo();
   renderSequence();
   var rows = computeSchedule(state.sequence, state.jobs, state.machines);
   renderGantt(rows);
@@ -923,6 +978,15 @@ function init(){
     zone.addEventListener("keydown", onCardKey);
   });
   document.getElementById("seq").addEventListener("click", onSeqButton);
+  // hovering a tile lights up its row in the job table
+  ["pool", "seq"].forEach(function(id){
+    var zone = document.getElementById(id);
+    zone.addEventListener("pointerover", function(e){
+      var c = e.target.closest(".card");
+      if(c && !drag && e.pointerType === "mouse") highlightJobRow(Number(c.dataset.job));
+    });
+    zone.addEventListener("pointerout", function(e){ if(e.target.closest(".card") && !drag) highlightJobRow(-1); });
+  });
 
   var dataBox = document.getElementById("dataBox");
   dataBox.addEventListener("input", onDataInput);
